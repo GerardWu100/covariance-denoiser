@@ -1,0 +1,26 @@
+{
+  "dataset_name": "demo_etf_prices",
+  "columns": [
+    "date",
+    "asset",
+    "close"
+  ],
+  "row_count": 34232,
+  "assets": [
+    "EEM",
+    "GLD",
+    "HYG",
+    "IWM",
+    "QQQ",
+    "SPY",
+    "TLT",
+    "VNQ"
+  ],
+  "start_date": "2008-01-02",
+  "end_date": "2024-12-31",
+  "source": "tracked_demo_cache",
+  "frequency": "1d",
+  "timestamp_timezone": "America/New_York_market_close_proxy",
+  "price_field": "close",
+  "is_adjusted_close": true
+}

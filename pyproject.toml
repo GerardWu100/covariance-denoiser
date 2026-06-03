@@ -1,0 +1,50 @@
+[project]
+name = "covariance-denoiser"
+version = "0.1.0"
+description = "Offline-first quantitative research pipeline for denoised covariance features and realized variance forecasting."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "clickhouse-connect>=0.8.0",
+  "jupyter>=1.1.1",
+  "matplotlib>=3.10.0",
+  "numpy>=2.2.0",
+  "pandas>=2.2.0",
+  "pyarrow>=19.0.0",
+  "scikit-learn>=1.6.0",
+]
+
+[project.scripts]
+covariance-denoiser = "covariance_denoiser.cli:main"
+
+[dependency-groups]
+dev = [
+  "mypy>=1.15.0",
+  "pytest>=8.3.0",
+  "ruff>=0.11.0",
+]
+
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests/unit", "tests/integration"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+ignore_missing_imports = true
+disallow_untyped_defs = true
+warn_unused_ignores = true
