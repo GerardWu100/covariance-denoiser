@@ -8,11 +8,12 @@ estimators improve an out-of-sample realized-variance forecast.
 
 ## Section Blueprint
 
-1. Start with the negative result: the persistence baseline wins.
+1. Start with the audited result: rolling persistence wins both metrics.
 2. Explain why an eight-asset, 63-day covariance matrix is noisy.
 3. Define the sample covariance, the Marchenko-Pastur upper edge, eigenvalue
    cleaning, and the forward realized-variance target.
-4. Walk through the leakage-safe expanding-window experiment.
+4. Derive the exact equal-weight portfolio return and walk through the
+   label-availability purge, fold-local scaling, and nonnegative forecast floor.
 5. Present estimator conditioning, aggregate errors, and the forecast path.
 6. Interpret the result: numerical stability and predictive information are
    separate claims.
@@ -38,14 +39,16 @@ estimators improve an out-of-sample realized-variance forecast.
    random-matrix-theory covariance estimates; takeaway: both cleaning methods
    make the matrix less ill-conditioned.
 2. **Out-of-sample error:** compare mean absolute error and root mean squared
-   error; takeaway: the naive last-value forecast wins both metrics.
+   error; takeaway: rolling persistence wins both, with a much narrower RMSE gap.
+3. **Forecast path:** compare both forecasts with realized variance; takeaway:
+   neither model anticipates abrupt shocks reliably.
 
 ## Known Gaps and Assumptions
 
 - The tracked cache contains adjusted daily closes for eight exchange-traded
   funds from 2008-01-02 through 2024-12-31.
 - This is one fixed feature set and one ridge penalty, not a hyperparameter study.
-- Forecasts overlap within each 21-day block, so the article treats aggregate
+- Targets overlap across adjacent dates, so the article treats aggregate
   errors as descriptive rather than attaching inferential confidence intervals.
 - No trading strategy or portfolio utility is evaluated.
 
@@ -58,6 +61,7 @@ website commit will be made in this task.
 
 ## Review Decision
 
-Approved for drafting after checking the code, mathematical reference, raw-cache
-metadata, and a fresh offline demo run. The evidence supports a candid negative
-result, not a claim that denoising improved forecasts.
+The second-pass audit corrected unavailable-label leakage, approximate portfolio
+aggregation, unscaled ridge inputs, and negative variance forecasts. The updated
+evidence supports a negative forecast result, not a general claim that denoising
+improves forecasts.

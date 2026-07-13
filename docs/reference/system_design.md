@@ -16,9 +16,9 @@ and date span before any analytics run.
 
 The data module loads long-format prices from validated parquet.
 
-The target module constructs forward realized variance from future equal-weight
-log returns over a fixed horizon. This keeps the forecasting target explicit and
-avoids lookahead bias.
+The target module constructs exact daily-rebalanced equal-weight portfolio log
+returns, then sums their future squares over a fixed horizon. Each target carries
+an explicit availability lag equal to that horizon.
 
 ## Layer 3: Feature Engineering
 
@@ -33,13 +33,18 @@ Feature rows are indexed by in-sample window end timestamps.
 
 ## Layer 4: Walk-Forward Modeling
 
-The modeling layer runs expanding-window walk-forward splits with strict temporal
-ordering (`train < test` for every fold).
+The modeling layer runs expanding-window walk-forward splits. It purges labels
+whose future-return windows are incomplete at the first test timestamp, then fits
+the feature scaler and ridge model on the remaining training rows only.
 
 Models:
 
 - naive last-value baseline
 - ridge regression
+
+Ridge forecasts are floored at zero because realized variance cannot be negative.
+The naive forecast rolls daily: at timestamp `t`, it uses the forward target
+stamped `t-h`, which has just become fully observable.
 
 ## Layer 5: Evaluation And Artifacts
 

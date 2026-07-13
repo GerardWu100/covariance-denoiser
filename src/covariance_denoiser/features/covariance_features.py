@@ -11,6 +11,9 @@ from covariance_denoiser.estimators.sample import (
     estimate_sample_covariance,
 )
 from covariance_denoiser.estimators.shrinkage import estimate_ledoit_wolf_covariance
+from covariance_denoiser.targets.realized_variance import (
+    compute_equal_weight_portfolio_log_returns,
+)
 
 DEFAULT_TRAILING_VOL_DAYS: int = 21
 DEFAULT_ANNUALIZATION_DAYS: int = 252
@@ -75,7 +78,9 @@ def build_covariance_feature_table(
             sample_condition_number, MIN_CONDITION_NUMBER_DENOMINATOR
         )
 
-        equal_weight_window_returns = in_sample_window.mean(axis=1)
+        equal_weight_window_returns = compute_equal_weight_portfolio_log_returns(
+            returns=in_sample_window
+        )
         trailing_window = equal_weight_window_returns.tail(DEFAULT_TRAILING_VOL_DAYS)
         trailing_realized_volatility = float(
             trailing_window.std(ddof=1) * np.sqrt(float(annualization_days))

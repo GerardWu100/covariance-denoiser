@@ -15,6 +15,7 @@ Outputs
 -------
 blog/images/01-condition-numbers.png
 blog/images/02-forecast-errors.png
+blog/images/03-forecast-paths.png
     Static, high-resolution figures referenced by both language versions.
 """
 
@@ -23,7 +24,10 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from sklearn.covariance import LedoitWolf
+from covariance_denoiser.data.prices import build_log_return_matrix, load_raw_prices
+from covariance_denoiser.estimators.rmt import estimate_rmt_covariance
+from covariance_denoiser.estimators.sample import estimate_sample_covariance
+from covariance_denoiser.estimators.shrinkage import estimate_ledoit_wolf_covariance
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -36,74 +40,28 @@ FIGURE_DPI = 180
 ANNUALIZATION_DAYS = 252
 
 
-def covariance_to_correlation(covariance: np.ndarray) -> np.ndarray:
-    """Convert a covariance matrix into a correlation matrix.
-
-    Parameters
-    ----------
-    covariance
-        Square covariance matrix whose two axes follow the same asset order.
-
-    Returns
-    -------
-    np.ndarray
-        Correlation matrix with unit diagonal.
-    """
-    volatility = np.sqrt(np.diag(covariance))
-    return covariance / np.outer(volatility, volatility)
-
-
-def rmt_covariance(returns: np.ndarray) -> np.ndarray:
-    """Clean a sample covariance matrix using the project's RMT convention.
-
-    Parameters
-    ----------
-    returns
-        Matrix of log returns with observations on rows and assets on columns.
-
-    Returns
-    -------
-    np.ndarray
-        Random-matrix-theory-denoised covariance matrix in the input asset order.
-    """
-    sample = np.cov(returns, rowvar=False, ddof=1)
-    correlation = covariance_to_correlation(sample)
-    eigenvalues, eigenvectors = np.linalg.eigh(correlation)
-    q = returns.shape[0] / returns.shape[1]
-    lambda_plus = (1.0 + q**-0.5) ** 2
-    noise = eigenvalues <= lambda_plus
-    eigenvalues[noise] = eigenvalues[noise].mean()
-    cleaned = eigenvectors @ np.diag(eigenvalues) @ eigenvectors.T
-    cleaned = 0.5 * (cleaned + cleaned.T)
-    diagonal = np.sqrt(np.diag(cleaned))
-    cleaned = cleaned / np.outer(diagonal, diagonal)
-    volatility = np.std(returns, axis=0, ddof=1)
-    return np.diag(volatility) @ cleaned @ np.diag(volatility)
-
-
-def load_latest_return_window() -> np.ndarray:
+def load_latest_return_window() -> pd.DataFrame:
     """Load the latest complete 63-day log-return window.
 
     Returns
     -------
-    np.ndarray
-        Dense return matrix with 63 rows and one column per tracked asset.
+    pd.DataFrame
+        Return matrix with 63 rows and one column per tracked asset.
     """
-    prices = pd.read_parquet(RAW_PRICE_PATH)
-    wide = prices.pivot(index="date", columns="asset", values="close").sort_index()
-    returns = np.log(wide / wide.shift(1)).dropna()
-    return returns.tail(LOOKBACK_DAYS).to_numpy()
+    prices = load_raw_prices(data_dir=RAW_PRICE_PATH.parent)
+    returns = build_log_return_matrix(prices=prices)
+    return returns.tail(LOOKBACK_DAYS)
 
 
 def plot_condition_numbers() -> None:
     """Plot latest-window condition numbers for all covariance estimators."""
     returns = load_latest_return_window()
     matrices = {
-        "Sample": np.cov(returns, rowvar=False, ddof=1),
-        "Ledoit-Wolf": LedoitWolf().fit(returns).covariance_,
-        "RMT": rmt_covariance(returns),
+        "Sample": estimate_sample_covariance(returns),
+        "Ledoit-Wolf": estimate_ledoit_wolf_covariance(returns),
+        "RMT": estimate_rmt_covariance(returns),
     }
-    values = [np.linalg.cond(matrix) for matrix in matrices.values()]
+    values = [np.linalg.cond(matrix.to_numpy()) for matrix in matrices.values()]
     colors = ["#64748b", "#0f766e", "#0891b2"]
 
     fig, ax = plt.subplots(figsize=(10, 5.6), constrained_layout=True)
@@ -128,7 +86,7 @@ def plot_forecast_errors() -> None:
     rmse = metrics.loc[["naive_last_value", "ridge_regression"], "rmse"].to_numpy()
     bars_mae = ax.bar(positions - width / 2, mae, width, label="MAE", color="#0f766e")
     bars_rmse = ax.bar(positions + width / 2, rmse, width, label="RMSE", color="#d97706")
-    ax.set_title("The persistence baseline wins out of sample")
+    ax.set_title("Rolling persistence wins both forecast metrics")
     ax.set_ylabel("Annualized variance error")
     ax.set_xticks(positions, labels)
     ax.legend()
@@ -139,11 +97,51 @@ def plot_forecast_errors() -> None:
     plt.close(fig)
 
 
+def plot_forecast_paths() -> None:
+    """Plot realized and predicted annualized variance through time."""
+    predictions = pd.read_csv(DATA_DIR / "fold_predictions.csv", parse_dates=["timestamp"])
+    predictions = predictions.sort_values("timestamp")
+
+    fig, ax = plt.subplots(figsize=(12, 6.2), constrained_layout=True)
+    ax.plot(
+        predictions["timestamp"],
+        predictions["y_true"],
+        color="#111827",
+        linewidth=1.2,
+        label="Realized",
+    )
+    ax.plot(
+        predictions["timestamp"],
+        predictions["naive_prediction"],
+        color="#d97706",
+        linewidth=1.0,
+        alpha=0.75,
+        label="Last observed target",
+    )
+    ax.plot(
+        predictions["timestamp"],
+        predictions["ridge_prediction"],
+        color="#0f766e",
+        linewidth=1.0,
+        alpha=0.8,
+        label="Scaled ridge with zero floor",
+    )
+    ax.set_title("Both models lag abrupt variance shocks")
+    ax.set_xlabel("Forecast timestamp")
+    ax.set_ylabel("Annualized variance")
+    ax.set_ylim(bottom=0.0)
+    ax.legend(ncols=3)
+    ax.grid(alpha=0.2)
+    fig.savefig(IMAGE_DIR / "03-forecast-paths.png", dpi=FIGURE_DPI)
+    plt.close(fig)
+
+
 def main() -> None:
     """Generate every chart referenced by the bilingual article."""
     IMAGE_DIR.mkdir(parents=True, exist_ok=True)
     plot_condition_numbers()
     plot_forecast_errors()
+    plot_forecast_paths()
 
 
 if __name__ == "__main__":

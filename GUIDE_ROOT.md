@@ -1,35 +1,46 @@
 # GUIDE_ROOT
 
-## Purpose
+## Part 1: Conceptual explanation
 
-This repository is an offline-first quantitative finance resume project.
+This repository tests whether covariance-denoising diagnostics help forecast the
+next 21 trading days of realized variance for a daily-rebalanced equal-weight ETF
+portfolio. The default workflow is offline: it reads the tracked parquet cache,
+builds log returns, creates rolling covariance features, and evaluates a
+persistence benchmark against ridge regression.
 
-The core workflow forecasts forward realized variance from denoised covariance
-features built from local parquet prices in `data/raw/`.
+The timing contract is stricter than ordinary train-before-test ordering. A
+target stamped at date $t$ contains returns from $t+1$ through $t+h$, where $h$
+is the forecast horizon, and becomes observable only at $t+h$. Each walk-forward
+fold removes the $h-1$ unavailable target rows before its test origin. The
+persistence benchmark updates daily with the newly observable lagged target.
+Ridge features are standardized from training data only, and variance forecasts
+are floored at zero.
 
-## Where Things Live
+The data flow is:
 
-- `data/raw/`: tracked raw parquet inputs and metadata contract.
-- `src/covariance_denoiser/`: package implementation.
-- `scripts/`: thin shell wrappers; logic stays in the package.
-- `tests/unit/` and `tests/integration/`: fast module tests and pipeline integration tests.
-- `logs/`: dated runtime logs (gitignored).
-- `src/covariance_denoiser/data/`: raw-cache validation, local loading, optional ClickHouse refresh.
-- `src/covariance_denoiser/targets/`: log-return and realized-variance target construction.
-- `src/covariance_denoiser/features/`: denoiser-driven feature engineering.
-- `src/covariance_denoiser/models/`: naive baseline and linear walk-forward modeling.
-- `src/covariance_denoiser/evaluation/`: deterministic regression metrics.
-- `src/covariance_denoiser/artifacts/`: CSV, markdown, and PNG export helpers.
-- `src/covariance_denoiser/pipelines/`: end-to-end offline demo pipeline.
-- `notebooks/01_offline_research_pipeline.ipynb`: teaching notebook.
-- `docs/reference/`: architecture and math references.
-- `docs/user/`: practical run guide.
-- `tests/`: focused contract tests for data, targets, features, models, pipelines, and notebook.
+```text
+tracked prices -> asset log returns -> rolling covariance features
+               -> exact equal-weight portfolio returns -> forward variance target
+               -> purged expanding folds -> benchmark and scaled ridge -> artifacts
+```
 
-## Runtime Contract
+ClickHouse is an explicit cache-refresh option. It is never required by the
+normal pipeline, notebook, or tests.
 
-- Default commands run from local parquet files only.
-- Raw inputs must live under `data/raw/`.
-- Notebook execution must not require database access.
-- ClickHouse refresh is optional and isolated to explicit refresh code paths.
-- If `data/raw/` is valid, the project runs in any clone with no database.
+## Part 2: Code reference
+
+- `README.md`: project scope, commands, outputs, and evaluation guardrails.
+- `pyproject.toml`: package metadata, dependencies, command-line entrypoint, and tool settings.
+- `data/raw/`: tracked adjusted-price cache and metadata contract.
+- `src/covariance_denoiser/`: package implementation; start with its package guide.
+- `scripts/`: thin wrappers for the demo and test suite.
+- `tests/`: unit and integration contracts, including timing and portfolio-return checks.
+- `notebooks/01_offline_research_pipeline.ipynb`: top-to-bottom teaching walkthrough.
+- `docs/reference/`: mathematical and system contracts.
+- `docs/user/`: practical run instructions.
+- `blog/`: bilingual article, frozen audited evidence, chart generator, and images.
+- `outputs/demo/`: gitignored artifacts from a local run.
+
+## Part 3: Short journal
+
+- 2026-07-13: The forecast audit added a target-availability purge, exact portfolio aggregation, fold-local feature scaling, and a zero floor for variance predictions.

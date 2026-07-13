@@ -64,6 +64,7 @@ def run_offline_demo_pipeline(config: OfflineDemoConfig) -> None:
         min_train_size=config.min_train_size,
         test_size=config.test_size,
         step_size=config.step_size,
+        target_horizon_days=config.horizon_days,
     )
 
     predictions, coefficients = run_walk_forward_models(

@@ -20,19 +20,22 @@ This representation is additive through time and is standard in volatility model
 
 ## Forward Realized Variance Target
 
-Let equal-weight one-step return be:
+Asset log returns are converted to simple returns before portfolio aggregation.
+The exact daily-rebalanced equal-weight portfolio log return is:
 
-`r_eq,t = (1 / N) * sum_{i=1}^N r_{i,t}`
+`r_p,t = log(1 + (1 / N) * sum_{i=1}^N (exp(r_i,t) - 1))`
 
 Forward realized variance for timestamp `t` and horizon `h` is:
 
-`RV_{t,h} = sum_{j=1}^h r_eq,t+j^2`
+`RV_{t,h} = sum_{j=1}^h r_p,t+j^2`
 
 Annualized target scaling is:
 
 `RV_annualized_{t,h} = RV_{t,h} * (252 / h)`
 
-The target uses only future returns (`t+1` through `t+h`) to avoid lookahead leakage.
+The target uses returns `t+1` through `t+h` and becomes observable at `t+h`.
+Walk-forward training therefore purges the `h-1` target timestamps immediately
+before each test origin; chronological row ordering by itself is insufficient.
 
 ## Covariance Feature Set
 
@@ -68,10 +71,16 @@ RMT denoising follows this sequence:
 
 Two models are evaluated:
 
-- naive baseline: last observed target value
+- naive baseline: target lagged by `h`, updated at every forecast timestamp
 - ridge regression: linear model with L2 regularization
 
-Train folds are strictly before test folds.
+Train folds contain only targets observable by the first test timestamp. Features
+are standardized using each fold's training statistics before ridge fitting.
+The fixed ridge penalty is applied in standardized feature space, and final
+variance forecasts are floored at zero.
+
+Adjacent target timestamps share `h-1` future returns. Aggregate error measures
+are descriptive unless inference explicitly accounts for this overlap.
 
 ## Evaluation Metrics
 

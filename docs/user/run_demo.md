@@ -38,6 +38,11 @@ After a successful run, `outputs/demo/` contains:
 - `summary.md`
 - PNG plots
 
+The default evaluation uses a 21-day forward target. It purges unavailable labels
+at each test origin, standardizes predictors inside each fold, and floors ridge
+variance forecasts at zero. The reported errors cover overlapping 21-day targets
+and should be read as descriptive forecast comparisons.
+
 ## Run Notebook
 
 ```bash

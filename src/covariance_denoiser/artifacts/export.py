@@ -29,7 +29,8 @@ def _write_summary_markdown(
         "## Notes",
         "- Runtime path uses local parquet files under `data/raw/`.",
         "- Denoised covariance features are computed from in-sample windows only.",
-        "- Walk-forward splits enforce train-before-test ordering.",
+        "- Walk-forward splits purge targets that are unavailable at each test origin.",
+        "- Ridge features are scaled inside each training fold and forecasts are floored at zero.",
     ]
 
     output_path.write_text("\n".join(lines), encoding="utf-8")

@@ -14,7 +14,7 @@ The project is a compact quantitative research pipeline:
 2. Build log returns.
 3. Build forward realized variance targets.
 4. Build denoised covariance features.
-5. Train walk-forward models.
+5. Train label-availability-safe walk-forward models.
 6. Evaluate against a naive baseline.
 7. Export compact static artifacts.
 
@@ -87,6 +87,19 @@ A successful demo run writes:
 - One naive baseline model.
 - One trained linear model.
 - One denoiser-driven feature set.
+
+## Evaluation Guardrails
+
+- A target stamped at date `t` uses portfolio returns from `t+1` through
+  `t+horizon_days` and is not admitted to training until the full window is known.
+- Equal-weight portfolio log returns are computed by averaging asset simple returns
+  first, which represents an exactly daily-rebalanced basket.
+- Ridge predictors are standardized inside each training fold. Variance forecasts
+  are floored at zero before evaluation.
+- The persistence benchmark updates daily with the target that has just completed
+  its observation horizon; it is not frozen across a test block.
+- Adjacent 21-day targets overlap, so aggregate MAE and RMSE are descriptive rather
+  than independent-observation inference.
 
 ## Out Of Scope
 

@@ -1,205 +1,295 @@
 ---
-title: "Cleaning Covariance Is Not the Same as Forecasting Variance"
-description: "A walk-forward test of random matrix theory and Ledoit-Wolf covariance features on eight ETFs, with a negative result worth understanding."
+title: "A Cleaner Covariance Matrix Is Not Yet a Better Forecast"
+description: "A leakage-safe walk-forward test of random matrix and Ledoit-Wolf covariance features on eight ETFs, including the math, code, and audited negative result."
 date: 2026-07-12
 image: "images/cover-covariance-denoising.png"
 categories: ["Quantitative Finance", "Risk Modeling"]
 ---
 
-A cleaner covariance matrix ought to make a risk model more stable. It does not
-follow that features extracted from that matrix will forecast variance better.
-I tested that distinction on eight exchange-traded funds (ETFs) from 2008 through
-2024. The denoised features fed a ridge regression, and the forecasts were judged
-strictly out of sample. A naive last-value forecast won.
+Covariance cleaning solves a real problem. A noisy covariance matrix can make a
+minimum-variance portfolio or a hedge ratio unstable. I wanted to test a harder
+claim: do diagnostics from a cleaned matrix help predict the next month of
+realized variance?
 
-That result is more useful than a narrow model victory would have been. Random
-matrix theory (RMT) did what it was designed to do: it reduced an ill-conditioned
-covariance estimate. The failure happened one step later, when numerical
-stability was asked to become predictive information.
+I ran the experiment on eight exchange-traded funds (ETFs) from 2008 through
+2024. A rolling last-observed target benchmark wins. Relative to that benchmark,
+scaled ridge regression raises mean absolute error (MAE) by 73.0% and root mean
+squared error (RMSE) by 4.2%. Cleaning clearly improves matrix conditioning. These
+seven cleaned-matrix features do not improve this forecast.
 
 ![A noisy covariance matrix passing through a spectral filter and emerging in a cleaner form.](images/cover-covariance-denoising.png)
 
-The image captures the experiment's two separate stages: filtering the noisy
-matrix on the left, then asking whether the ordered output on the right contains
-information about the future.
+The distinction in that last sentence matters. Conditioning asks whether a
+matrix reacts wildly to small input changes. Forecasting asks whether today's
+matrix contains information about returns that have not happened. One can
+improve without the other.
 
-## Why covariance needs cleaning
+## The object being estimated
 
-Let $P_{i,t}$ be the adjusted closing price of asset $i$ on trading day $t$. Its
-log return is
+Let $P_{i,t}$ denote the adjusted closing price of asset $i$ on trading day $t$.
+Its log return, in decimal units per day, is
 
 $$
 r_{i,t}=\log\left(\frac{P_{i,t}}{P_{i,t-1}}\right).
 $$
 
-Put $T$ observations for $N$ assets into a return matrix $R$. If $\bar R$ is the
-matrix whose rows contain the column means of $R$, the sample covariance matrix is
+Place $T$ daily observations for $N$ assets in the return matrix $R$. Let
+$\bar R$ be a matrix whose rows repeat the column means of $R$. The sample
+covariance is
 
 $$
 S=\frac{1}{T-1}(R-\bar R)^\top(R-\bar R).
 $$
 
-Here, $T=63$ trading days and $N=8$ ETFs: EEM, GLD, HYG, IWM, QQQ, SPY, TLT,
-and VNQ. Sixty-three observations are enough to invert an eight-dimensional
-matrix, but that is a low bar. Sampling error can still produce unstable small
-eigenvalues. The condition number, defined as the largest singular value divided
-by the smallest, measures this sensitivity. A large condition number means a
-small change in the data can cause a large change in calculations that depend on
-the matrix.
+Each element $S_{ij}$ has units of daily return squared. The experiment uses
+$T=63$ observations and $N=8$ ETFs: EEM, GLD, HYG, IWM, QQQ, SPY, TLT, and VNQ.
+The matrix is invertible, but invertibility is a weak standard. Sampling error
+can still push the smallest eigenvalues around enough to destabilize an inverse.
 
-I compared the sample estimate with two cleaners. Ledoit-Wolf shrinkage pulls the
-sample covariance toward a structured target. RMT cleaning works in correlation
-space. Define the observation-to-dimension ratio as $q=T/N$. Under the
-Marchenko-Pastur model, the upper edge of the noise eigenvalue bulk is
+For a symmetric positive-definite covariance matrix, the condition number is
+
+$$
+\kappa(S)=\frac{\lambda_{\max}(S)}{\lambda_{\min}(S)},
+$$
+
+where $\lambda_{\max}(S)$ and $\lambda_{\min}(S)$ are its largest and smallest
+eigenvalues. The ratio is dimensionless. A high value warns that an inverse-based
+calculation may be sensitive to a small perturbation in the returns.
+
+## Two ways to clean the estimate
+
+Ledoit-Wolf shrinkage blends the sample covariance with a structured target. The
+shrinkage intensity is estimated from the data rather than selected by hand. The
+method trades a little bias for lower estimation variance.
+
+The random matrix theory (RMT) estimator works on correlation instead. Write
+$D=\operatorname{diag}(\sigma_1,\ldots,\sigma_N)$, where $\sigma_i$ is the sample
+daily volatility of asset $i$. The sample correlation is
+
+$$
+C=D^{-1}SD^{-1}.
+$$
+
+Unlike covariance, correlation is unitless. Eigendecompose it as
+$C=V\Lambda V^\top$, where $V$ contains eigenvectors and
+$\Lambda=\operatorname{diag}(\lambda_1,\ldots,\lambda_N)$ contains eigenvalues.
+
+The Marchenko-Pastur result describes the asymptotic eigenvalue distribution of a
+large sample covariance matrix built from independent, identically distributed
+noise. Define $q=T/N$. For unit-variance noise, its upper spectral edge is
 
 $$
 \lambda_+=\left(1+q^{-1/2}\right)^2.
 $$
 
-The implementation replaces every correlation eigenvalue $\lambda_i$ satisfying
-$\lambda_i\leq\lambda_+$ with the average of those noise eigenvalues. It then
-reconstructs a unit-diagonal correlation matrix and scales it by the sample
-volatilities.
+Here, $q=63/8=7.875$ and $\lambda_+=1.8397$. The implementation classifies every
+$\lambda_i\leq\lambda_+$ as noise, replaces those eigenvalues by their mean,
+reconstructs a unit-diagonal correlation matrix, and maps it back to covariance:
+
+$$
+\widetilde S=D\widetilde C D.
+$$
 
 ```python
 eigenvalues, eigenvectors = np.linalg.eigh(sample_correlation.to_numpy())
-q = len(returns_window) / returns_window.shape[1]
-lambda_plus = (1.0 + q**-0.5) ** 2
+aspect_ratio = len(returns_window) / returns_window.shape[1]
+lambda_plus = (1.0 + aspect_ratio**-0.5) ** 2
 
 noise_mask = eigenvalues <= lambda_plus
 eigenvalues[noise_mask] = eigenvalues[noise_mask].mean()
 cleaned = eigenvectors @ np.diag(eigenvalues) @ eigenvectors.T
 ```
 
-On the final 63-day window, the sample covariance condition number was 271.2.
-Ledoit-Wolf reduced it to 9.1; RMT reduced it to 91.1. The cleaners are not
-equivalent, but both made the estimate less sensitive.
+This threshold is a filtering rule, not a literal model of ETF returns. Returns
+are heteroskedastic, cross-correlated, and serially dependent, while $N=8$ is far
+from an asymptotic high-dimensional setting. Renormalizing the reconstructed
+matrix also changes the cleaned spectrum slightly. Those caveats make RMT a
+useful heuristic here, not ground truth.
+
+On the final 63-day window, the sample covariance condition number is 271.2.
+Ledoit-Wolf reduces it to 9.1 and RMT to 91.1.
 
 ![Condition numbers for sample, Ledoit-Wolf, and RMT covariance estimates on the final 63-day window.](images/01-condition-numbers.png)
 
-Ledoit-Wolf produces the largest reduction on this window. RMT is less aggressive,
-but its condition number is still roughly one-third of the sample estimate.
+The chart supports a narrow claim: both cleaners improve conditioning on this
+window, and Ledoit-Wolf is more aggressive. It does not establish a better
+covariance forecast or better portfolio performance.
 
-## Turning matrices into a forecast
+## From a matrix to seven predictors
 
-The model does not forecast a covariance matrix directly. For each rolling
-63-day window, it records seven features:
+For every rolling 63-day window, the pipeline records seven predictors:
 
 - average pairwise sample correlation;
-- condition numbers for sample, Ledoit-Wolf, and RMT covariance;
+- condition numbers for the sample, Ledoit-Wolf, and RMT covariances;
 - each cleaned condition number divided by the sample condition number;
-- trailing 21-day annualized realized volatility of an equal-weight portfolio.
+- trailing 21-day annualized volatility of a daily rebalanced equal-weight portfolio.
 
-Let $r_{\mathrm{eq},t}=N^{-1}\sum_{i=1}^{N}r_{i,t}$ be the equal-weight portfolio
-return. For a forecast horizon of $h=21$ trading days, the annualized forward
-realized variance target is
+The portfolio-return construction deserves care. Averaging asset log returns is
+only an approximation to an equal-weight portfolio return. The code first
+converts each asset log return to a simple return, averages those simple returns,
+then converts the portfolio result back to log form. If $N$ is the asset count,
 
 $$
-RV_{t,h}=\frac{252}{h}\sum_{j=1}^{h}r_{\mathrm{eq},t+j}^{2}.
+r_{p,t}=\log\left(1+\frac{1}{N}\sum_{i=1}^{N}\left(e^{r_{i,t}}-1\right)\right).
 $$
 
-The date alignment matters. Every feature at time $t$ uses returns up to and
-including $t$. The target uses returns from $t+1$ through $t+h$. No future return
-enters a feature.
+The response variable is annualized forward realized variance over $h=21$
+trading days:
 
-The evaluation uses an expanding training window. The first fold has 252 rows of
-training data and 21 rows of test data. Each subsequent fold advances by 21 rows,
-while keeping all earlier training observations. There are 187 folds and 3,927
-out-of-sample predictions from April 2009 through November 2024.
+$$
+RV_{t,h}=\frac{252}{h}\sum_{j=1}^{h}r_{p,t+j}^{2}.
+$$
+
+$RV_{t,h}$ is variance, not volatility, so its units are annualized return
+squared. The trailing predictor is volatility, in annualized return units. That
+difference is deliberate and does not require equal units in a regression, but
+it does require feature scaling before applying a common ridge penalty.
+
+## The timing rule that prevents label leakage
+
+A feature stamped $t$ uses returns through $t$. Its target uses returns from
+$t+1$ through $t+21$ and becomes observable only at $t+21$. A chronological
+train-before-test split is therefore insufficient. At the first test timestamp,
+the final 20 target rows immediately before it are still incomplete.
+
+The corrected walk-forward code purges those unavailable labels. Each first fold
+contains 252 observed training labels, 20 purged label timestamps, and 21 test
+rows. The model advances by 21 rows and retains all earlier labels that have
+become observable.
 
 ```python
-test_start = config.min_train_size
+test_start = config.min_train_size + config.target_horizon_days - 1
 while test_start + config.test_size <= sample_count:
-    train_slice = slice(0, test_start)
+    train_stop = test_start - config.target_horizon_days + 1
+    train_slice = slice(0, train_stop)
     test_slice = slice(test_start, test_start + config.test_size)
     slices.append((train_slice, test_slice))
     test_start += config.step_size
 ```
 
-The benchmark predicts every observation in a test fold with the last target
-observed in training. The competing model is ridge regression, a linear
-regression with an L2 penalty that discourages large coefficients. Its penalty
-parameter is fixed at 1.0.
+This produces 186 folds and 3,906 out-of-sample forecasts from May 2009 through
+November 2024. Targets on adjacent test dates overlap for 20 of 21 returns, so
+the aggregate errors are descriptive. Ordinary independent-observation standard
+errors would be misleading.
 
-## The baseline wins
+## Benchmark and ridge model
 
-Let $y_k$ be realized variance and $\hat y_k$ its forecast for out-of-sample
-observation $k$, with $K$ total predictions. Mean absolute error (MAE) is
+The benchmark updates on every test date. At date $t$, it predicts with the
+target stamped $t-21$, whose final return has just become observable. It is both
+information-matched and strong because volatility persists. Freezing that value
+for an entire 21-day block would give the model fresh daily features while
+denying the benchmark fresh daily observations.
+
+The competing model is ridge regression. Within each fold, predictor $j$ is
+standardized using only the training mean $\mu_j$ and training standard deviation
+$s_j$:
 
 $$
-\operatorname{MAE}=\frac{1}{K}\sum_{k=1}^{K}|y_k-\hat y_k|,
+z_{k,j}=\frac{x_{k,j}-\mu_j}{s_j},
 $$
 
-and root mean squared error (RMSE) is
+where $x_{k,j}$ is predictor $j$ for training observation $k$. Ridge estimates
+the intercept $\beta_0$ and coefficient vector $\beta$ by minimizing
+
+$$
+\sum_{k=1}^{M}\left(y_k-\beta_0-z_k^\top\beta\right)^2
++\alpha\sum_{j=1}^{7}\beta_j^2,
+$$
+
+where $M$ is the number of training observations, $y_k$ is realized variance,
+$z_k$ is the standardized feature vector, and the fixed penalty is $\alpha=1$.
+Scaling matters because condition numbers can be in the hundreds while trailing
+volatility is a decimal. Without scaling, the penalty treats their coefficients
+unequally for no economic reason.
+
+An unconstrained linear model can predict negative variance. The pipeline applies
+a prespecified economic constraint,
+
+$$
+\widehat{RV}_{t,h}=\max\left(0,\widehat{RV}^{\mathrm{raw}}_{t,h}\right).
+$$
+
+The scaler, regression, and zero floor are identical in every fold. No parameter
+was selected using the test results.
+
+## Rolling persistence wins
+
+For $K$ out-of-sample forecasts, let $y_k$ be realized variance and $\hat y_k$
+its prediction. The two reported loss functions are
+
+$$
+\operatorname{MAE}=\frac{1}{K}\sum_{k=1}^{K}|y_k-\hat y_k|
+$$
+
+and
 
 $$
 \operatorname{RMSE}=\sqrt{\frac{1}{K}\sum_{k=1}^{K}(y_k-\hat y_k)^2}.
 $$
 
-Both are measured in annualized variance units, and lower is better.
+Both are measured in annualized variance units. RMSE penalizes large misses more
+heavily because it squares each error.
 
 | Model | MAE | RMSE |
 |---|---:|---:|
-| Last observed value | 0.00797 | 0.03134 |
-| Ridge regression | 0.01908 | 0.03613 |
-
-Ridge's MAE was 139.5% higher than the baseline's, and its RMSE was 15.3% higher.
-The gap between those two comparisons is revealing. Squaring the errors makes
-RMSE especially sensitive to large misses. Both models suffer during variance
-bursts, so ridge looks less bad under RMSE than it does under MAE. It still loses
-on both.
+| Rolling last observable target | 0.01061 | 0.03401 |
+| Scaled ridge with zero floor | 0.01835 | 0.03543 |
 
 ![Mean absolute error and root mean squared error for the two out-of-sample forecasts.](images/02-forecast-errors.png)
 
-The last-value forecast is crude, yet volatility persistence gives it a
-hard-to-beat advantage. Ridge produces a smoother conditional estimate, while
-the 21-day target can change abruptly as shocks enter and leave its forward
-window.
+Ridge loses on both measures. The 73.0% MAE gap is large, while the 4.2% RMSE gap
+is narrow. Squaring errors compresses the difference because both models miss
+abrupt variance shocks. The result still depends on the stated loss function for
+economic interpretation, but not for the ranking in this sample.
 
-## What failed, and what did not
+![Realized annualized variance and both out-of-sample forecasts through time.](images/03-forecast-paths.png)
 
-The RMT estimator did not fail its own test. It changed the eigenvalue spectrum
-and lowered the covariance condition number. That is evidence of better
-conditioning, not evidence of better forecasts.
+The time series explains the split verdict. Both forecasts lag abrupt shocks.
+Ridge also produces false positives and reaches its zero floor on 784 of 3,906
+forecasts, or 20.1% of the sample. Those ordinary-date misses hurt MAE. Neither
+model anticipates crisis variance reliably, which keeps the RMSE gap much smaller.
 
-The forecasting design asks seven contemporaneous summaries to predict an
-equal-weight portfolio's next 21-day variance. Several reasons may explain the
-weak result:
+## What this experiment does and does not show
 
-- condition numbers describe numerical geometry, not necessarily the direction
-  of future volatility;
-- a 21-day target is dominated by shocks that trailing covariance cannot foresee;
-- ridge is linear and uses one fixed penalty across every fold;
-- the trailing realized-volatility feature may carry most of the useful
-  persistence already available to the model;
-- eight broad ETFs leave little room for high-dimensional noise cleaning to show
-  its strongest advantage.
+The conditioning result and the baseline victory both survive the audit, but the
+original implementation did not. Unavailable labels had to be purged, portfolio
+returns reconstructed exactly, predictors scaled, negative variance forecasts
+floored, and the benchmark updated at the same daily frequency as the model. The
+frequency with which the floor binds also shows that linear ridge is a poor match
+for the shape of conditional variance.
 
-This test also does not answer whether denoising improves minimum-variance
-portfolios, hedge ratios, or risk attribution. Those applications consume the
-covariance matrix itself. Here the matrix is compressed into scalar diagnostics,
-then passed to a forecasting model. That extra transformation changes the
-question.
+The test still cannot isolate the incremental contribution of denoising. Ridge
+receives sample diagnostics, cleaned diagnostics, ratios, and trailing volatility
+together. An ablation study would compare nested feature sets. The experiment
+also holds the universe, 63-day lookback, 21-day horizon, and ridge penalty fixed.
+It evaluates no minimum-variance portfolio, turnover cost, hedge ratio, or risk
+attribution task, all of which use covariance more directly than seven scalar
+summaries do.
 
-## The next experiment I would run
+My next version would separate three questions:
 
-I would separate the claims. First, evaluate covariance estimators on their own
-terms: out-of-sample portfolio variance, weight turnover, and sensitivity to the
-lookback window. Second, test variance forecasting with a baseline ladder: last
-value, a heterogeneous autoregressive volatility model, then regularized models
-with nested time-series tuning. A larger asset universe would also make the
-RMT setting more meaningful because the ratio $N/T$ would be less forgiving.
+1. Does cleaning reduce out-of-sample covariance estimation error?
+2. Does it improve realized risk and turnover for a constrained portfolio?
+3. Do cleaned-matrix features add forecast value beyond trailing volatility?
 
-The present result is still a sound stopping point. A risk estimate can be
-numerically cleaner and economically useful without becoming a superior
-forecasting signal. Treating those as separate hypotheses prevents an attractive
-matrix from receiving credit it has not earned.
+Those tests need nested temporal tuning and an ablation table. A larger asset
+universe would also put the RMT approximation in a setting closer to the problem
+it was designed for.
 
-## Reproducibility
+## Reproducibility and references
 
-The run uses the repository's tracked adjusted-close cache, dated 2008-01-02 to
-2024-12-31. The article's frozen metrics and predictions live under `blog/data/`,
-and `blog/generate_charts.py` regenerates both evidence charts. The cover was
-created specifically for this article with an image-generation model. The study
-is a fixed demonstration, not a search over universes, horizons, penalties, or
-feature sets.
+The tracked cache contains adjusted closes from 2008-01-02 through 2024-12-31.
+`blog/data/` freezes the audited metrics, predictions, and coefficients.
+`blog/generate_charts.py` regenerates all three evidence charts from those files
+and the tracked price cache. The repository test suite includes explicit checks
+for target timing, exact equal-weight portfolio returns, and nonnegative variance
+forecasts.
+
+Primary references:
+
+- V. A. Marchenko and L. A. Pastur, [“Distribution of Eigenvalues for Some Sets of Random Matrices” (1967)](https://doi.org/10.1070/SM1967v001n04ABEH001994).
+- Olivier Ledoit and Michael Wolf, [“A Well-Conditioned Estimator for Large-Dimensional Covariance Matrices” (2004)](https://doi.org/10.1016/S0047-259X(03)00096-4).
+- Arthur E. Hoerl and Robert W. Kennard, [“Ridge Regression: Biased Estimation for Nonorthogonal Problems” (1970)](https://doi.org/10.1080/00401706.1970.10488634).
+
+The cover was created for this article with an image-generation model. No market
+data or forecast result in the post comes from the generated image.

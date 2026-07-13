@@ -1,26 +1,30 @@
 # GUIDE_src
 
-## Purpose
+## Part 1: Conceptual explanation
 
-`src/` contains the implementation package for the offline research pipeline.
+`src/` contains the importable package. The package keeps data validation,
+estimation, feature construction, target construction, modeling, evaluation, and
+artifact export in separate modules. The pipeline layer assembles those modules;
+scripts and notebooks call the package rather than duplicating its logic.
 
-## Structure
+The target and model layers share an important invariant: a forward target enters
+training only after every return in its horizon has occurred. The model layer
+also owns fold-local scaling and the nonnegative variance constraint.
 
-- `covariance_denoiser/__init__.py`: package version marker.
-- `covariance_denoiser/cli.py`: command-line entry points (`covariance-denoiser` console script).
-- `covariance_denoiser/__main__.py`: `python -m covariance_denoiser` entry point.
-- `covariance_denoiser/data/`: local raw-cache contract and optional refresh path.
+## Part 2: Code reference
+
+- `covariance_denoiser/cli.py`: `covariance-denoiser` command-line interface.
+- `covariance_denoiser/data/`: tracked cache validation, price loading, and optional ClickHouse refresh.
 - `covariance_denoiser/estimators/`: sample, Ledoit-Wolf, and RMT covariance estimators.
-- `covariance_denoiser/targets/`: target construction for forward realized variance.
-- `covariance_denoiser/features/`: denoiser-driven feature engineering.
-- `covariance_denoiser/models/`: walk-forward model training utilities.
-- `covariance_denoiser/evaluation/`: error metrics.
-- `covariance_denoiser/artifacts/`: export helpers for static outputs.
-- `covariance_denoiser/pipelines/`: end-to-end offline pipeline orchestration.
+- `covariance_denoiser/features/`: rolling covariance diagnostics and trailing portfolio volatility.
+- `covariance_denoiser/targets/`: exact equal-weight portfolio return and forward variance construction.
+- `covariance_denoiser/models/`: persistence baseline and purged, scaled ridge evaluation.
+- `covariance_denoiser/evaluation/`: deterministic MAE and RMSE calculations.
+- `covariance_denoiser/artifacts/`: CSV, Markdown, and PNG writers.
+- `covariance_denoiser/pipelines/`: offline workflow orchestration.
 
-## Design Rules
+Start with `pipelines/offline_demo.py`, then follow its imports into the domain modules.
 
-- Keep runtime defaults fully offline.
-- Isolate optional ClickHouse logic from default execution paths.
-- Use typed function signatures.
-- Keep modules narrow and interview-explainable.
+## Part 3: Short journal
+
+- 2026-07-13: Model training now respects forward-label availability and applies ridge penalties in standardized feature space.

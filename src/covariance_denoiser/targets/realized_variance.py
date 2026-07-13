@@ -2,9 +2,29 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 DEFAULT_ANNUALIZATION_DAYS: int = 252
+
+
+def compute_equal_weight_portfolio_log_returns(returns: pd.DataFrame) -> pd.Series:
+    """Compute exact daily-rebalanced equal-weight portfolio log returns.
+
+    Parameters
+    ----------
+    returns
+        Asset log returns in decimal form, with dates on rows and assets on columns.
+
+    Returns
+    -------
+    pd.Series
+        Portfolio log return at each timestamp. Asset simple returns are averaged
+        before conversion back to log returns.
+    """
+    asset_simple_returns = np.expm1(returns)
+    portfolio_simple_returns = asset_simple_returns.mean(axis=1)
+    return np.log1p(portfolio_simple_returns).rename("equal_weight_portfolio_log_return")
 
 
 def compute_forward_realized_variance_target(
@@ -31,7 +51,7 @@ def compute_forward_realized_variance_target(
     pd.Series
         Forward realized variance target indexed by current timestamp.
     """
-    equal_weight_returns = returns.mean(axis=1)
+    equal_weight_returns = compute_equal_weight_portfolio_log_returns(returns=returns)
     squared_equal_weight_returns = equal_weight_returns.pow(2)
 
     # Rolling sum over the next `horizon_days` squared returns; shift aligns label to today.
