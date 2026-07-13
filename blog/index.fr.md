@@ -248,7 +248,7 @@ fortement les grandes erreurs puisqu'elle élève chaque écart au carré.
 | Dernière cible observable glissante | 0.01061 | 0.03401 |
 | Ridge standardisé avec plancher à zéro | 0.01835 | 0.03543 |
 
-![Erreur absolue moyenne et racine de l'erreur quadratique moyenne des deux prévisions hors échantillon.](images/02-forecast-errors.png)
+![Erreurs agrégées et trajectoires hors échantillon complètes pour la persistance glissante et ridge.](images/02-forecast-evidence.png)
 
 Ridge perd sur les deux mesures. L'écart de MAE, 73,0 %, est large ; celui de RMSE,
 4,2 %, est étroit. La mise au carré réduit la différence parce que les deux
@@ -256,9 +256,7 @@ modèles ratent les chocs brusques de variance. Le choix de la fonction de perte
 reste important pour l'interprétation économique, mais il ne change pas le
 classement dans cet échantillon.
 
-![Variance annualisée réalisée et deux prévisions hors échantillon au fil du temps.](images/03-forecast-paths.png)
-
-La série temporelle explique les écarts. Les deux prévisions réagissent
+Le panneau inférieur explique pourquoi l'écart de RMSE reste étroit. Les deux prévisions réagissent
 en retard aux chocs brusques. Ridge produit aussi de faux positifs et atteint son
 plancher à zéro dans 784 prévisions sur 3 906, soit 20,1 % de l'échantillon. Ces
 erreurs sur les dates ordinaires dégradent la MAE. Aucun des deux modèles
@@ -296,7 +294,7 @@ pour lequel elle a été conçue.
 
 Le cache suivi contient les cours ajustés du 2008-01-02 au 2024-12-31.
 `blog/data/` fige les métriques, les prévisions et les coefficients audités.
-`blog/generate_charts.py` régénère les trois graphiques à partir de ces fichiers
+`blog/generate_charts.py` régénère les deux figures de résultats à partir de ces fichiers
 et du cache de cours. La suite de tests vérifie explicitement le calendrier des
 cibles, le rendement exact du portefeuille équipondéré et la non-négativité des
 prévisions de variance.

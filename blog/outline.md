@@ -38,10 +38,10 @@ estimators improve an out-of-sample realized-variance forecast.
 1. **Condition numbers on the latest window:** compare sample, Ledoit-Wolf, and
    random-matrix-theory covariance estimates; takeaway: both cleaning methods
    make the matrix less ill-conditioned.
-2. **Out-of-sample error:** compare mean absolute error and root mean squared
-   error; takeaway: rolling persistence wins both, with a much narrower RMSE gap.
-3. **Forecast path:** compare both forecasts with realized variance; takeaway:
-   neither model anticipates abrupt shocks reliably.
+2. **Forecast evidence, two-panel figure:** compare mean absolute error and root
+   mean squared error above, then both forecast paths against realized variance
+   below; takeaway: rolling persistence wins both aggregate metrics, while neither
+   model anticipates abrupt shocks reliably.
 
 ## Known Gaps and Assumptions
 

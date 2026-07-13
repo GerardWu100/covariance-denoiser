@@ -235,16 +235,14 @@ heavily because it squares each error.
 | Rolling last observable target | 0.01061 | 0.03401 |
 | Scaled ridge with zero floor | 0.01835 | 0.03543 |
 
-![Mean absolute error and root mean squared error for the two out-of-sample forecasts.](images/02-forecast-errors.png)
+![Aggregate errors and the full out-of-sample forecast paths for rolling persistence and ridge.](images/02-forecast-evidence.png)
 
 Ridge loses on both measures. The 73.0% MAE gap is large, while the 4.2% RMSE gap
 is narrow. Squaring errors compresses the difference because both models miss
 abrupt variance shocks. The result still depends on the stated loss function for
 economic interpretation, but not for the ranking in this sample.
 
-![Realized annualized variance and both out-of-sample forecasts through time.](images/03-forecast-paths.png)
-
-The time series explains the split verdict. Both forecasts lag abrupt shocks.
+The lower panel explains why the RMSE gap is narrow. Both forecasts lag abrupt shocks.
 Ridge also produces false positives and reaches its zero floor on 784 of 3,906
 forecasts, or 20.1% of the sample. Those ordinary-date misses hurt MAE. Neither
 model anticipates crisis variance reliably, which keeps the RMSE gap much smaller.
@@ -280,7 +278,7 @@ it was designed for.
 
 The tracked cache contains adjusted closes from 2008-01-02 through 2024-12-31.
 `blog/data/` freezes the audited metrics, predictions, and coefficients.
-`blog/generate_charts.py` regenerates all three evidence charts from those files
+`blog/generate_charts.py` regenerates both evidence charts from those files
 and the tracked price cache. The repository test suite includes explicit checks
 for target timing, exact equal-weight portfolio returns, and nonnegative variance
 forecasts.

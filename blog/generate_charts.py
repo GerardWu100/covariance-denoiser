@@ -14,8 +14,7 @@ data/raw/raw_prices.parquet
 Outputs
 -------
 blog/images/01-condition-numbers.png
-blog/images/02-forecast-errors.png
-blog/images/03-forecast-paths.png
+blog/images/02-forecast-evidence.png
     Static, high-resolution figures referenced by both language versions.
 """
 
@@ -74,43 +73,47 @@ def plot_condition_numbers() -> None:
     plt.close(fig)
 
 
-def plot_forecast_errors() -> None:
-    """Plot out-of-sample model errors from the frozen demo run."""
+def plot_forecast_evidence() -> None:
+    """Combine aggregate forecast errors and time-series evidence in one figure."""
     metrics = pd.read_csv(DATA_DIR / "metrics.csv").set_index("model")
+    predictions = pd.read_csv(DATA_DIR / "fold_predictions.csv", parse_dates=["timestamp"])
+    predictions = predictions.sort_values("timestamp")
     labels = ["Last value", "Ridge"]
     positions = np.arange(len(labels))
     width = 0.34
 
-    fig, ax = plt.subplots(figsize=(10, 5.6), constrained_layout=True)
+    fig, axes = plt.subplots(
+        2,
+        1,
+        figsize=(12, 10),
+        gridspec_kw={"height_ratios": [1.0, 1.55]},
+        constrained_layout=True,
+    )
+    error_axis, path_axis = axes
     mae = metrics.loc[["naive_last_value", "ridge_regression"], "mae"].to_numpy()
     rmse = metrics.loc[["naive_last_value", "ridge_regression"], "rmse"].to_numpy()
-    bars_mae = ax.bar(positions - width / 2, mae, width, label="MAE", color="#0f766e")
-    bars_rmse = ax.bar(positions + width / 2, rmse, width, label="RMSE", color="#d97706")
-    ax.set_title("Rolling persistence wins both forecast metrics")
-    ax.set_ylabel("Annualized variance error")
-    ax.set_xticks(positions, labels)
-    ax.legend()
-    ax.grid(axis="y", alpha=0.25)
-    ax.bar_label(bars_mae, fmt="%.4f", padding=3)
-    ax.bar_label(bars_rmse, fmt="%.4f", padding=3)
-    fig.savefig(IMAGE_DIR / "02-forecast-errors.png", dpi=FIGURE_DPI)
-    plt.close(fig)
+    bars_mae = error_axis.bar(
+        positions - width / 2, mae, width, label="MAE", color="#0f766e"
+    )
+    bars_rmse = error_axis.bar(
+        positions + width / 2, rmse, width, label="RMSE", color="#d97706"
+    )
+    error_axis.set_title("A. Rolling persistence wins both forecast metrics")
+    error_axis.set_ylabel("Annualized variance error")
+    error_axis.set_xticks(positions, labels)
+    error_axis.legend()
+    error_axis.grid(axis="y", alpha=0.25)
+    error_axis.bar_label(bars_mae, fmt="%.4f", padding=3)
+    error_axis.bar_label(bars_rmse, fmt="%.4f", padding=3)
 
-
-def plot_forecast_paths() -> None:
-    """Plot realized and predicted annualized variance through time."""
-    predictions = pd.read_csv(DATA_DIR / "fold_predictions.csv", parse_dates=["timestamp"])
-    predictions = predictions.sort_values("timestamp")
-
-    fig, ax = plt.subplots(figsize=(12, 6.2), constrained_layout=True)
-    ax.plot(
+    path_axis.plot(
         predictions["timestamp"],
         predictions["y_true"],
         color="#111827",
         linewidth=1.2,
         label="Realized",
     )
-    ax.plot(
+    path_axis.plot(
         predictions["timestamp"],
         predictions["naive_prediction"],
         color="#d97706",
@@ -118,7 +121,7 @@ def plot_forecast_paths() -> None:
         alpha=0.75,
         label="Last observed target",
     )
-    ax.plot(
+    path_axis.plot(
         predictions["timestamp"],
         predictions["ridge_prediction"],
         color="#0f766e",
@@ -126,13 +129,13 @@ def plot_forecast_paths() -> None:
         alpha=0.8,
         label="Scaled ridge with zero floor",
     )
-    ax.set_title("Both models lag abrupt variance shocks")
-    ax.set_xlabel("Forecast timestamp")
-    ax.set_ylabel("Annualized variance")
-    ax.set_ylim(bottom=0.0)
-    ax.legend(ncols=3)
-    ax.grid(alpha=0.2)
-    fig.savefig(IMAGE_DIR / "03-forecast-paths.png", dpi=FIGURE_DPI)
+    path_axis.set_title("B. Both models lag abrupt variance shocks")
+    path_axis.set_xlabel("Forecast timestamp")
+    path_axis.set_ylabel("Annualized variance")
+    path_axis.set_ylim(bottom=0.0)
+    path_axis.legend(ncols=3)
+    path_axis.grid(alpha=0.2)
+    fig.savefig(IMAGE_DIR / "02-forecast-evidence.png", dpi=FIGURE_DPI)
     plt.close(fig)
 
 
@@ -140,8 +143,7 @@ def main() -> None:
     """Generate every chart referenced by the bilingual article."""
     IMAGE_DIR.mkdir(parents=True, exist_ok=True)
     plot_condition_numbers()
-    plot_forecast_errors()
-    plot_forecast_paths()
+    plot_forecast_evidence()
 
 
 if __name__ == "__main__":
