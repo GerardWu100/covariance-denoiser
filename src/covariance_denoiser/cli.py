@@ -10,7 +10,13 @@ from covariance_denoiser.data.clickhouse_refresh import (
     ClickHouseRefreshConfig,
     refresh_raw_cache_from_clickhouse,
 )
+from covariance_denoiser.data.raw_cache import default_raw_data_dir, project_root_from_module
 from covariance_denoiser.pipelines.offline_demo import OfflineDemoConfig, run_offline_demo_pipeline
+
+# Defaults are anchored to the repository root so the command behaves the same
+# from any working directory instead of only from the repository root.
+DEFAULT_DATA_DIR: Path = default_raw_data_dir()
+DEFAULT_OUTPUT_DIR: Path = project_root_from_module() / "outputs" / "demo"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -31,13 +37,13 @@ def build_parser() -> argparse.ArgumentParser:
     demo_parser.add_argument(
         "--data-dir",
         type=Path,
-        default=Path("data/raw"),
+        default=DEFAULT_DATA_DIR,
         help="Directory containing raw_prices.parquet and raw_prices.metadata.json.",
     )
     demo_parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("outputs/demo"),
+        default=DEFAULT_OUTPUT_DIR,
         help="Directory for exported offline demo artifacts.",
     )
     demo_parser.add_argument("--lookback-days", type=int, default=63)
@@ -52,7 +58,7 @@ def build_parser() -> argparse.ArgumentParser:
         "refresh-raw-cache",
         help="Optional one-time ClickHouse refresh for data/raw cache.",
     )
-    refresh_parser.add_argument("--data-dir", type=Path, default=Path("data/raw"))
+    refresh_parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR)
     refresh_parser.add_argument("--host", type=str, required=True)
     refresh_parser.add_argument("--port", type=int, default=8123)
     refresh_parser.add_argument("--username", type=str, required=True)

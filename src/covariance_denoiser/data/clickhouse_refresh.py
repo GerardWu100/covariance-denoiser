@@ -7,6 +7,7 @@ explicitly request one-time cache refresh.
 from __future__ import annotations
 
 import json
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -102,14 +103,18 @@ def refresh_raw_cache_from_clickhouse(
         "ORDER BY date, asset"
     )
 
-    client = clickhouse_connect.get_client(
-        host=config.host,
-        port=config.port,
-        username=config.username,
-        password=config.password,
-    )
+    # closing() releases the HTTP session even when the query raises, so a failed
+    # refresh does not leave an open connection behind.
+    with closing(
+        clickhouse_connect.get_client(
+            host=config.host,
+            port=config.port,
+            username=config.username,
+            password=config.password,
+        )
+    ) as client:
+        rows = client.query(sql_query).result_rows
 
-    rows = client.query(sql_query).result_rows
     refreshed_prices = pd.DataFrame(rows, columns=["date", "asset", "close"])
     refreshed_prices["date"] = pd.to_datetime(refreshed_prices["date"])
     refreshed_prices["asset"] = refreshed_prices["asset"].astype(str)
