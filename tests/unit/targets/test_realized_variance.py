@@ -6,9 +6,9 @@ import numpy as np
 import pandas as pd
 
 from covariance_denoiser.data.prices import build_log_return_matrix
-from covariance_denoiser.targets.realized_variance import compute_forward_realized_variance_target
 from covariance_denoiser.targets.realized_variance import (
     compute_equal_weight_portfolio_log_returns,
+    compute_forward_realized_variance_target,
 )
 
 

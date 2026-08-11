@@ -11,7 +11,6 @@ from covariance_denoiser.estimators.shrinkage import estimate_ledoit_wolf_covari
 from covariance_denoiser.features.covariance_features import build_covariance_feature_table
 from covariance_denoiser.targets.realized_variance import compute_forward_realized_variance_target
 
-
 EXPECTED_FEATURE_COLUMNS: set[str] = {
     "sample_avg_pairwise_correlation",
     "sample_condition_number",

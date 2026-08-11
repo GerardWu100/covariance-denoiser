@@ -23,11 +23,11 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+
 from covariance_denoiser.data.prices import build_log_return_matrix, load_raw_prices
 from covariance_denoiser.estimators.rmt import estimate_rmt_covariance
 from covariance_denoiser.estimators.sample import estimate_sample_covariance
 from covariance_denoiser.estimators.shrinkage import estimate_ledoit_wolf_covariance
-
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 BLOG_DIR = Path(__file__).resolve().parent
@@ -92,12 +92,8 @@ def plot_forecast_evidence() -> None:
     error_axis, path_axis = axes
     mae = metrics.loc[["naive_last_value", "ridge_regression"], "mae"].to_numpy()
     rmse = metrics.loc[["naive_last_value", "ridge_regression"], "rmse"].to_numpy()
-    bars_mae = error_axis.bar(
-        positions - width / 2, mae, width, label="MAE", color="#0f766e"
-    )
-    bars_rmse = error_axis.bar(
-        positions + width / 2, rmse, width, label="RMSE", color="#d97706"
-    )
+    bars_mae = error_axis.bar(positions - width / 2, mae, width, label="MAE", color="#0f766e")
+    bars_rmse = error_axis.bar(positions + width / 2, rmse, width, label="RMSE", color="#d97706")
     error_axis.set_title("A. Rolling persistence wins both forecast metrics")
     error_axis.set_ylabel("Annualized variance error")
     error_axis.set_xticks(positions, labels)
