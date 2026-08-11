@@ -3,7 +3,7 @@ name = "covariance-denoiser"
 version = "0.1.0"
 description = "Offline-first quantitative research pipeline for denoised covariance features and realized variance forecasting."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
   "clickhouse-connect>=0.8.0",
   "jupyter>=1.1.1",

@@ -1,109 +1,118 @@
 # Covariance Denoiser
 
-## Research Question
+Offline research pipeline that tests whether denoised covariance features improve
+next-window realized variance forecasts for a small ETF portfolio.
 
-This repository answers one interview-defensible question:
+## What it does
 
-**Do denoised covariance features improve next-window realized variance forecasts for a small ETF universe in an offline reproducible workflow?**
+The pipeline runs on a fixed ETF universe (SPY, TLT, GLD, QQQ, EEM, IWM, HYG, VNQ)
+stored as local parquet prices:
 
-## Project Goal
+1. Loads `data/raw/raw_prices.parquet` and builds log returns.
+2. Builds a forward realized variance target for an equal-weight, daily-rebalanced
+   portfolio: the target at date $t$ sums squared portfolio returns over
+   $t+1, \dots, t+h$ and is not admitted to training until the full window is
+   known ($h$ = forecast horizon in trading days, default 21).
+3. Builds rolling covariance features using two estimators:
+   - Random-matrix-theory (Marchenko-Pastur) denoising: eigenvalues of the
+     sample correlation matrix below the Marchenko-Pastur noise edge
+     $\lambda_+ = (1 + q^{-1/2})^2$ (with $q = T/N$, the observation-to-asset
+     ratio) are replaced by their average.
+   - Ledoit-Wolf linear shrinkage of the sample covariance matrix (via
+     scikit-learn).
+4. Trains walk-forward ridge regression models with purged folds (unavailable
+   target rows are dropped, features are standardized within each fold) and
+   compares them to a persistence (naive) baseline.
+5. Exports metrics, predictions, coefficients, and plots to `outputs/demo/`.
 
-The project is a compact quantitative research pipeline:
+Full derivation of the target and features is in `docs/reference/math.md`. The
+timing and evaluation rules are in `docs/reference/system_design.md`.
 
-1. Load local parquet prices from `data/raw/`.
-2. Build log returns.
-3. Build forward realized variance targets.
-4. Build denoised covariance features.
-5. Train label-availability-safe walk-forward models.
-6. Evaluate against a naive baseline.
-7. Export compact static artifacts.
+## Requirements
 
-The default runtime path is fully offline. ClickHouse is optional and only used for one-time raw-cache refresh.
+- Python >= 3.13
+- No external service is required for the default offline pipeline, tests, or
+  notebook.
+- ClickHouse is only needed for the optional one-time `refresh-raw-cache`
+  command, which repopulates `data/raw/`. Connection details (host, port,
+  username, password, database, table) are passed as CLI flags, not read from
+  the environment.
 
-## Repository Layout
-
-- `data/raw/`: tracked parquet prices and metadata contract.
-- `src/covariance_denoiser/`: importable package (CLI, pipelines, estimators).
-- `scripts/`: thin shell wrappers around package commands.
-- `tests/unit/` and `tests/integration/`: contract and end-to-end tests.
-- `notebooks/01_offline_research_pipeline.ipynb`: teaching notebook for the full pipeline.
-- `outputs/demo/`: generated run artifacts (gitignored).
-- `logs/`: runtime logs (gitignored).
-- `docs/user/` and `docs/reference/`: run guide and architecture notes.
-
-## Quick Start
-
-### 1) Install dependencies
+## Setup
 
 ```bash
 uv sync --all-groups
 ```
 
-### 2) Run tests
-
-```bash
-uv run pytest -v
-```
-
-### 3) Run the offline demo pipeline
+## Usage
 
 ```bash
 uv run covariance-denoiser run-offline-demo --data-dir data/raw --output-dir outputs/demo
 ```
 
-Or use the thin script:
+Runs the full offline pipeline (steps 1-5 above) against the tracked parquet
+cache.
 
 ```bash
-chmod +x scripts/run_offline_demo.sh
-./scripts/run_offline_demo.sh
+uv run covariance-denoiser refresh-raw-cache --data-dir data/raw \
+  --host <host> --port 8123 --username <user> --password <password> \
+  --database <db> --table <table> \
+  --start-date 2008-01-01 --end-date 2024-12-31 \
+  --assets SPY TLT GLD QQQ EEM IWM HYG VNQ
 ```
 
-### 4) Run the teaching notebook
+Optional: repopulates `data/raw/` from ClickHouse. Never required for normal
+runs.
+
+```bash
+uv run pytest -v
+```
+
+Runs the unit and integration test suite.
 
 ```bash
 uv run jupyter lab notebooks/01_offline_research_pipeline.ipynb
 ```
 
-Execute top to bottom (offline, no ClickHouse):
+Opens the teaching notebook, which walks the same pipeline stages offline.
 
-```bash
-uv run python -m nbconvert --execute notebooks/01_offline_research_pipeline.ipynb --output /tmp/executed.ipynb
+Thin wrappers for the two most common commands live in `scripts/`:
+`run_offline_demo.sh` and `run_tests.sh`.
+
+## Configuration
+
+The demo pipeline is configured through CLI flags on `run-offline-demo` (see
+`src/covariance_denoiser/cli.py`), not a config file. The defaults are:
+
+- `--lookback-days 63`: covariance feature window.
+- `--horizon-days 21`: forecast horizon $h$.
+- `--min-train-size 252`, `--test-size 21`, `--step-size 21`: walk-forward fold sizes.
+- `--annualization-days 252`, `--ridge-alpha 1.0`.
+
+## Layout
+
+```text
+data/raw/                        tracked parquet prices and metadata contract
+src/covariance_denoiser/         package: CLI, pipelines, estimators, features, models
+scripts/                         thin wrappers for the demo and test suite
+tests/unit/ tests/integration/   contract and end-to-end tests
+notebooks/                       teaching notebook for the full pipeline
+docs/reference/, docs/user/      math/system reference and run guide
+outputs/demo/                    generated run artifacts (gitignored)
 ```
 
-## Output Artifacts
+## Output
 
-A successful demo run writes:
+A successful `run-offline-demo` run writes to `outputs/demo/`:
 
-- `metrics.csv`
-- `fold_predictions.csv`
-- `model_coefficients.csv`
+- `metrics.csv`, `fold_predictions.csv`, `model_coefficients.csv`
 - `summary.md`
 - static PNG plots
 
-## Scope
+Adjacent 21-day targets overlap, so aggregate MAE and RMSE are descriptive
+rather than independent-observation inference; see
+`docs/reference/system_design.md` for the full evaluation guardrails.
 
-- Offline parquet runtime by default.
-- One small ETF universe.
-- One naive baseline model.
-- One trained linear model.
-- One denoiser-driven feature set.
+## License
 
-## Evaluation Guardrails
-
-- A target stamped at date `t` uses portfolio returns from `t+1` through
-  `t+horizon_days` and is not admitted to training until the full window is known.
-- Equal-weight portfolio log returns are computed by averaging asset simple returns
-  first, which represents an exactly daily-rebalanced basket.
-- Ridge predictors are standardized inside each training fold. Variance forecasts
-  are floored at zero before evaluation.
-- The persistence benchmark updates daily with the target that has just completed
-  its observation horizon; it is not frozen across a test block.
-- Adjacent 21-day targets overlap, so aggregate MAE and RMSE are descriptive rather
-  than independent-observation inference.
-
-## Out Of Scope
-
-- Dashboards, HTML apps, and templating systems.
-- Portfolio optimization as a first-class deliverable.
-- Large model families and hyperparameter search.
-- Mandatory database access for normal runs.
+All rights reserved. See [LICENSE](LICENSE).
