@@ -168,31 +168,28 @@
 
 <p class="eyebrow"><span class="dot"></span>covariance-denoiser &middot; offline research pipeline &middot; code walkthrough</p>
 <h1>Covariance Denoiser: reading the code</h1>
-<p class="lede">What each module does, how the pieces feed each other, where the
-timing rules live, and what the pipeline actually found when it was run.</p>
+<p class="lede">What each module does, how the pieces connect, where the timing
+rules live, and what the run found.</p>
 
 <div class="box def">
   <span class="k">How to use this</span>
-  <p>Sections follow the order the code runs. Every snippet is copied from the
-  files under <code>src/covariance_denoiser/</code>. Every number in a grey
-  <b>Sample data</b> box came from running the real pipeline on the tracked
-  price file on 2026-08-10, not from an estimate. Coloured boxes flag design
-  choices, traps, and honest weaknesses.</p>
+  <p>Sections follow the order in which the code runs. Every snippet comes from
+  <code>src/covariance_denoiser/</code>. Numbers in grey <b>Sample data</b>
+  boxes come from the pipeline run on the tracked price file on 2026-08-10.
+  Coloured boxes mark design choices, traps, and weaknesses.</p>
 </div>
 
 <div class="box why">
   <span class="k">The process in plain English</span>
-  <p>The project asks one question: if you clean up a covariance matrix, do the
-  numbers you get out of the cleaned matrix help you forecast how volatile a
-  basket of exchange-traded funds will be over the next month? It loads
+  <p>The project asks whether cleaning a covariance matrix helps forecast the
+  next month's volatility for a basket of exchange-traded funds. It loads
   seventeen years of daily closing prices for eight funds, turns them into
-  returns, and for every day computes three versions of the covariance matrix
-  from the previous sixty-three days: the plain one, a shrunk one, and one with
-  its noisy directions filtered out. It squeezes those three matrices into seven
-  numbers, and tries to predict the next twenty-one days of realized variance
-  from them. The honest answer it lands on is <b>no</b>: a simple "last month
-  looked like this, next month will look the same" rule beats the fitted model
-  on both error measures.</p>
+  returns, and estimates three covariance matrices from the previous
+  sixty-three days: the plain estimate, a shrunk estimate, and one with noisy
+  directions filtered out. Seven values from those matrices are used to predict
+  the next twenty-one days of realized variance. The answer is <b>no</b>: the
+  simple rule that predicts next month's variance from the previous month's
+  variance beats the fitted model on both error measures.</p>
 </div>
 
 <h2 id="map"><span class="sec-no">00</span>Map</h2>
@@ -211,9 +208,9 @@ flowchart LR
   met --> exp["export_offline_demo_artifacts()"]
   exp --> artifacts[("outputs/demo")]
 </div>
-<p class="fnote">Boxes are functions. The two cylinders are files on disk. Arrows
-show which direction the data moves. The whole chain is driven by one function,
-<code>run_offline_demo_pipeline()</code>, which the command line calls.</p>
+<p class="fnote">Boxes are functions. Cylinders are files on disk. Arrows show
+the direction of data flow. The command line starts the whole chain through
+<code>run_offline_demo_pipeline()</code>.</p>
 
 <div class="toc">
   <div class="rk">Contents</div>
@@ -238,24 +235,24 @@ show which direction the data moves. The whole chain is driven by one function,
   </ol>
 </div>
 
-<h2 id="q"><span class="sec-no">01</span>The question, and the answer the code found</h2>
+<h2 id="q"><span class="sec-no">01</span>The question and the answer</h2>
 
 <p>The research question, taken word for word from <code>README.md</code>:
 <i>"Do denoised covariance features improve next-window realized variance
 forecasts for a small ETF universe in an offline reproducible workflow?"</i></p>
 
-<p>Two terms first, because the rest of the page leans on them.</p>
+<p>Three terms will appear throughout this page:</p>
 
 <ul>
-<li><b>Covariance matrix.</b> A square table. Cell $(i,j)$ says how much fund
-$i$ and fund $j$ move together. The diagonal holds each fund's own variance.
-With eight funds it is an 8&times;8 table.</li>
-<li><b>Denoising.</b> A covariance matrix estimated from only sixty-three days
-of data is mostly noise. Denoising means replacing the estimate with something
-better behaved. This project tries two recipes: Ledoit-Wolf shrinkage and
-random matrix theory filtering. Both are defined in section 06.</li>
-<li><b>Realized variance.</b> Add up the squared daily returns of a portfolio
-over a window. It measures how bumpy the ride actually was, after the fact.</li>
+<li><b>Covariance matrix.</b> A square table whose cell $(i,j)$ measures how
+fund $i$ and fund $j$ move together. The diagonal holds each fund's variance.
+With eight funds, it is an 8&times;8 table.</li>
+<li><b>Denoising.</b> A covariance matrix estimated from only sixty-three days of
+data contains substantial noise. Denoising replaces it with a more stable
+estimate. This project tries Ledoit-Wolf shrinkage and random matrix theory
+filtering. Both are defined in section 06.</li>
+<li><b>Realized variance.</b> The sum of a portfolio's squared daily returns over
+a window. It measures the volatility that actually occurred.</li>
 </ul>
 
 <div class="box data"><span class="k">Sample data</span>
@@ -271,18 +268,16 @@ days and lookback `63` days.
 
     &lt;- the fitted model lost</pre></div>
 </div>
-<p>3906 forecasts across 186 folds, covering 2009-05-01 to 2024-11-05. The
-fitted ridge model had a lower average error than the naive rule in only
-<b>27 of 186 folds</b>. It is also worse than simply predicting the long-run
-average every day, which would give a mean absolute error of 0.0121 against
-ridge's 0.0184.</p></div>
+<p>The run made 3906 forecasts across 186 folds, covering 2009-05-01 to
+2024-11-05. The fitted ridge model beat the naive rule on average in only
+<b>27 of 186 folds</b>. It also lost to a constant long-run average, whose mean
+absolute error would be 0.0121 versus ridge's 0.0184.</p></div>
 
-<div class="box why"><span class="k">Why a negative result is still worth reading</span>
-<p>The value of this repository is not the model. It is the timing machinery in
-section 08 that makes the negative result believable. Most volatility-forecasting
-code that "beats the benchmark" does so because a label leaked backwards in
-time. This code goes out of its way to make that impossible, and then reports
-that it did not beat the benchmark.</p></div>
+<div class="box why"><span class="k">Why the negative result matters</span>
+<p>The important part is the timing machinery in section 08. It makes the
+negative result credible. Volatility-forecasting code often appears to beat a
+benchmark because future information leaks into a label. This code blocks that
+leak and reports that it did not beat the benchmark.</p></div>
 
 <h2 id="layout"><span class="sec-no">02</span>Folder layout and entry points</h2>
 
@@ -307,45 +302,43 @@ that it did not beat the benchmark.</p></div>
   docs/                <span class="c"># reference/math.md, reference/system_design.md, user/run_demo.md</span>
   outputs/demo/        <span class="c"># where a run writes its results (git-ignored)</span></pre>
 
-<div class="box def"><span class="k">The three ways to start it</span>
+<div class="box def"><span class="k">Three ways to start it</span>
 <p><b>1. Installed command.</b> <code>uv run covariance-denoiser run-offline-demo</code>
 &mdash; declared in <code>pyproject.toml</code> under <code>[project.scripts]</code>,
 pointing at <code>covariance_denoiser.cli:main</code>.<br>
 <b>2. Shell wrapper.</b> <code>./scripts/run_offline_demo.sh</code> &mdash; changes
 to the repository root, then runs the same command.<br>
 <b>3. Notebook.</b> <code>notebooks/01_offline_research_pipeline.ipynb</code>
-&mdash; calls the same package functions stage by stage, so you can see the
-intermediate frames.</p>
-<p>There is a second command, <code>refresh-raw-cache</code>, which is the only
-thing in the repository that touches a database. Nothing in a normal run,
-a test, or the notebook calls it.</p></div>
+&mdash; calls the same package functions stage by stage and shows the intermediate
+frames.</p>
+<p>The second command, <code>refresh-raw-cache</code>, is the only repository code
+that touches a database. Normal runs, tests, and the notebook never call it.</p></div>
 
-<div class="box why"><span class="k">Why the layout looks over-built for one experiment</span>
-<p>Each stage is a separate module with one job, so a reviewer can check the
-target construction without reading the model code, and the tests can attack one
-contract at a time. The cost is that following a single number end to end means
-opening seven files. The payoff is that the tests in
-<code>tests/unit/targets/</code> and <code>tests/unit/models/</code> can pin the
-timing rules without spinning up the whole pipeline.</p></div>
+<div class="box why"><span class="k">Why the layout is split into modules</span>
+<p>Each module has one job. A reviewer can check target construction without
+reading the model code, and tests can check one contract at a time. The trade-off
+is that tracing one number end to end takes seven files. In return, the tests in
+<code>tests/unit/targets/</code> and <code>tests/unit/models/</code> can lock down
+the timing rules without running the whole pipeline.</p></div>
 
 <h2 id="config"><span class="sec-no">03</span>Settings and what changing each one does</h2>
 
-<p>There is no <code>config.toml</code>. Every setting is a command-line flag
-with a default set in <code>cli.py</code>. This is the full list.</p>
+<p>There is no <code>config.toml</code>. Each setting is a command-line flag with
+its default in <code>cli.py</code>.</p>
 
 <div class="scroll">
 <table>
 <thead><tr><th>Flag</th><th class="n">Default</th><th>What it controls</th><th>What happens if you change it</th></tr></thead>
 <tbody>
-<tr><td><code>--data-dir</code></td><td>repo <code>data/raw</code></td><td>Where the price file and its metadata live.</td><td>Points the run at a different tracked cache. The contract check in section 04 still has to pass.</td></tr>
-<tr><td><code>--output-dir</code></td><td>repo <code>outputs/demo</code></td><td>Where the six result files are written.</td><td>Created if missing. Existing files are overwritten without warning.</td></tr>
-<tr><td><code>--lookback-days</code></td><td class="n">63</td><td>How many days of returns go into each covariance estimate.</td><td>Raising it makes every covariance estimate steadier but slower to react, and raises $q=T/N$, which lowers the random matrix theory cutoff. Lowering it below the number of funds makes the sample covariance matrix singular.</td></tr>
-<tr><td><code>--horizon-days</code></td><td class="n">21</td><td>How far ahead the forecast reaches, in trading days.</td><td>This is the single most connected setting. It sets the target window, the size of the purge gap between training and testing, and the lag of the naive rule. All three move together automatically.</td></tr>
-<tr><td><code>--min-train-size</code></td><td class="n">252</td><td>Rows of fully observed history required before the first forecast.</td><td>Raising it shortens the tested period. At 252 the first forecast lands on 2009-05-01.</td></tr>
+<tr><td><code>--data-dir</code></td><td>repo <code>data/raw</code></td><td>Where the price file and metadata live.</td><td>Uses a different tracked cache. The contract check in section 04 still has to pass.</td></tr>
+<tr><td><code>--output-dir</code></td><td>repo <code>outputs/demo</code></td><td>Where the six result files go.</td><td>Created if missing. Existing files are overwritten without warning.</td></tr>
+<tr><td><code>--lookback-days</code></td><td class="n">63</td><td>How many days of returns go into each covariance estimate.</td><td>Higher values make estimates steadier but slower to react. They also raise $q=T/N$, which lowers the random matrix theory cutoff. A value below the number of funds makes the sample covariance matrix singular.</td></tr>
+<tr><td><code>--horizon-days</code></td><td class="n">21</td><td>How far ahead the forecast reaches, in trading days.</td><td>Sets the target window, the purge gap between training and testing, and the naive rule's lag. All three change together.</td></tr>
+<tr><td><code>--min-train-size</code></td><td class="n">252</td><td>Fully observed history required before the first forecast.</td><td>Higher values shorten the tested period. At 252 the first forecast lands on 2009-05-01.</td></tr>
 <tr><td><code>--test-size</code></td><td class="n">21</td><td>Forecasts made per fold before refitting.</td><td>Smaller means more frequent refits and a slower run.</td></tr>
-<tr><td><code>--step-size</code></td><td class="n">21</td><td>How far the window advances after each fold.</td><td>Setting it below <code>--test-size</code> makes test blocks overlap, so the same day is scored more than once and the error averages are silently double counted.</td></tr>
-<tr><td><code>--annualization-days</code></td><td class="n">252</td><td>Trading days per year, used to rescale the target and the trailing volatility feature.</td><td>Changes the units of the target and of one feature. It does not change which model wins, because both are rescaled by the same constant.</td></tr>
-<tr><td><code>--ridge-alpha</code></td><td class="n">1.0</td><td>Strength of the penalty that shrinks the fitted coefficients toward zero.</td><td>Larger flattens the model toward a constant. It is fixed, never tuned, and never selected by cross-validation.</td></tr>
+<tr><td><code>--step-size</code></td><td class="n">21</td><td>How far the window advances after each fold.</td><td>Below <code>--test-size</code>, test blocks overlap. The same day is scored more than once, silently double-counting the error averages.</td></tr>
+<tr><td><code>--annualization-days</code></td><td class="n">252</td><td>Trading days per year, used to rescale the target and trailing volatility.</td><td>Changes the units of the target and one feature. It does not change which model wins because both use the same constant.</td></tr>
+<tr><td><code>--ridge-alpha</code></td><td class="n">1.0</td><td>Strength of the penalty that shrinks fitted coefficients toward zero.</td><td>Higher values flatten the model toward a constant. It is fixed, never tuned, and never selected by cross-validation.</td></tr>
 </tbody>
 </table>
 </div>
@@ -355,30 +348,30 @@ with a default set in <code>cli.py</code>. This is the full list.</p>
 <code>features/covariance_features.py</code>, <code>DEFAULT_TRAILING_VOL_DAYS =
 21</code> sets the length of the trailing volatility feature and cannot be
 changed from the command line. If you run with <code>--horizon-days 63</code>,
-the target stretches to sixty-three days but that feature stays at twenty-one,
-and the naive rule shifts to sixty-three, so the feature and the benchmark stop
-lining up. Nothing warns you.</p></div>
+the target stretches to sixty-three days, but that feature stays at twenty-one
+and the naive rule shifts to sixty-three. The feature and benchmark no longer
+line up, with no warning.</p></div>
 
 <h2 id="data"><span class="sec-no">04</span>Reading the data &mdash; <code>raw_cache.py</code>, <code>prices.py</code></h2>
 
-<h3><code>validate_raw_cache</code> &mdash; refuse to run on the wrong file</h3>
+<h3><code>validate_raw_cache</code> &mdash; reject the wrong file</h3>
 
 <div class="box gist"><span class="k">In plain words</span>
-<p>Before any arithmetic happens, it checks that the price file on disk is
-exactly the file the project expects, and stops with a clear message if not.</p></div>
+<p>Before doing any arithmetic, it checks that the price file on disk is the
+expected file. If not, it stops with a clear message.</p></div>
 
 <div class="box def"><span class="k">What it does</span>
-<p><b>Input:</b> a directory path. <b>Output:</b> a small frozen record holding
-a yes/no flag, a message, and the two file paths. <b>Role:</b>
+<p><b>Input:</b> a directory path. <b>Output:</b> a small frozen record with a
+yes/no flag, a message, and the two file paths. <b>Role:</b>
 <code>load_raw_prices</code> calls it and raises <code>FileNotFoundError</code>
-if the flag is false, so no downstream module ever sees an unchecked file.</p></div>
+if the flag is false. No later module sees an unchecked file.</p></div>
 
-<p>It runs nine checks in order: both files exist, the JSON parses to an object,
-all eight required metadata keys are present, the parquet columns are exactly
-<code>['date', 'asset', 'close']</code>, the row count matches, the set of fund
-symbols matches, the first and last dates match, the frequency is
-<code>"1d"</code>, the price field is <code>"close"</code>, and
-<code>is_adjusted_close</code> is <code>True</code>.</p>
+<p>It checks that both files exist, that the JavaScript Object Notation (JSON)
+metadata parses to an object, that all eight required keys are present, and that
+the parquet columns are exactly <code>['date', 'asset', 'close']</code>. It then
+checks the row count, fund symbols, first and last dates, frequency
+<code>"1d"</code>, price field <code>"close"</code>, and
+<code>is_adjusted_close</code> <code>True</code>.</p>
 
 <div class="box data"><span class="k">Sample data</span>
 <div class="io">
@@ -394,19 +387,18 @@ symbols matches, the first and last dates match, the frequency is
 <div><span class="lab">out &mdash; validate_raw_cache(...)</span>
 <pre>is_valid: True
 message: "Raw cache is valid."</pre>
-<p class="fnote">34232 rows = 4279 dates &times; 8 funds. That arithmetic
-checking out is itself a signal that no fund is missing a day.</p></div>
+<p class="fnote">34232 rows = 4279 dates &times; 8 funds. The matching count is a
+quick check that no fund is missing a day.</p></div>
 </div></div>
 
 <div class="box why"><span class="k">Why check <code>is_adjusted_close</code> at all</span>
-<p>Adjusted closing prices already fold dividends and share splits back into the
-price. Unadjusted prices contain a large fake drop on every split and every
-dividend date. Since the whole project is about the size of squared returns,
-one unadjusted split would create a false volatility spike big enough to move
-the results. The metadata flag makes that assumption a hard requirement rather
-than a hope.</p></div>
+<p>Adjusted closing prices include dividends and share splits. Unadjusted prices
+show a large artificial drop on each split and dividend date. Because the
+project measures squared returns, one unadjusted split could create a false
+volatility spike large enough to change the results. The metadata flag makes
+adjusted prices a requirement.</p></div>
 
-<h3><code>build_log_return_matrix</code> &mdash; long table to wide returns</h3>
+<h3><code>build_log_return_matrix</code> &mdash; reshape prices into returns</h3>
 
 <pre>wide_prices = prices.pivot(index="date", columns="asset", values="close").sort_index()
 
@@ -417,10 +409,10 @@ return log_returns</pre>
 
 <div class="box def"><span class="k">The formula</span>
 <p>$$r_{i,t}=\log\left(\frac{P_{i,t}}{P_{i,t-1}}\right)=\log P_{i,t}-\log P_{i,t-1}$$</p>
-<p class="fnote">$P_{i,t}$ is the adjusted closing price of fund $i$ on day
-$t$. $r_{i,t}$ is its log return, a plain decimal, so 0.0090 means about
-+0.90 per cent. Log returns are used because they add up across days, which is
-what makes the target in section 05 a simple sum.</p></div>
+<p class="fnote">$P_{i,t}$ is fund $i$'s adjusted closing price on day $t$.
+$r_{i,t}$ is its log return, written as a decimal; 0.0090 means about +0.90 per
+cent. Log returns add across days, which lets the target in section 05 use a
+simple sum.</p></div>
 
 <div class="box data"><span class="k">Sample data</span>
 <div class="io stack">
@@ -441,18 +433,17 @@ shape: (4278, 8)   span: 2008-01-03 -> 2024-12-31</pre>
 103.445633, and $\log(103.445633/103.495598)=-0.000483$, which is the value in
 the table.</p></div>
 </div>
-<p>4279 price dates become 4278 return dates. The first date is lost because a
-return needs a previous price.</p></div>
+<p>4279 price dates become 4278 return dates. The first date is dropped because
+a return needs a previous price.</p></div>
 
 <div class="box warn"><span class="k">Trap</span>
-<p><code>dropna(how="any")</code> drops a whole date if <i>any</i> single fund
-is missing that day. It does not fill or interpolate. With this tracked file
-nothing is dropped, but on a fund that listed later, or on a half-day where one
-fund has no print, you would silently lose the other seven funds' returns for
-that date, and the following day's return would quietly span two calendar days.
-Nothing logs it.</p></div>
+<p><code>dropna(how="any")</code> drops a whole date when <i>any</i> fund is
+missing. It does not fill or interpolate. The tracked file loses nothing, but a
+later-listed fund or a half-day with no price for one fund would also remove the
+other seven funds' returns for that date. The following day's return would then
+span two calendar days, with no log message.</p></div>
 
-<h2 id="target"><span class="sec-no">05</span>The thing being forecast &mdash; <code>realized_variance.py</code></h2>
+<h2 id="target"><span class="sec-no">05</span>The forecast target &mdash; <code>realized_variance.py</code></h2>
 
 <h3><code>compute_equal_weight_portfolio_log_returns</code> &mdash; eight funds into one basket</h3>
 
@@ -461,15 +452,15 @@ portfolio_simple_returns = asset_simple_returns.mean(axis=1)
 return np.log1p(portfolio_simple_returns).rename("equal_weight_portfolio_log_return")</pre>
 
 <div class="box gist"><span class="k">In plain words</span>
-<p>It turns eight funds' daily moves into one number: what a basket holding an
-equal dollar amount of each fund, rebalanced every day, actually returned.</p></div>
+<p>It turns eight daily fund returns into one number: the return of a basket with
+equal dollar amounts in each fund, rebalanced every day.</p></div>
 
 <div class="box def"><span class="k">The formula</span>
 <p>$$r_{p,t}=\log\left(1+\frac{1}{N}\sum_{i=1}^{N}\left(e^{r_{i,t}}-1\right)\right)$$</p>
-<p class="fnote">$r_{i,t}$ is fund $i$'s log return on day $t$; $e^{r_{i,t}}-1$
-converts it to a simple percentage return; $N=8$ is the number of funds;
-$r_{p,t}$ is the portfolio's log return. Reading it inside out: undo the log to
-get plain percentage moves, average those, then take the log again.</p></div>
+<p class="fnote">$r_{i,t}$ is fund $i$'s log return on day $t$;
+$e^{r_{i,t}}-1$ converts it to a simple return; $N=8$ is the number of funds;
+and $r_{p,t}$ is the portfolio's log return. The calculation converts each log
+return, averages the simple returns, then takes the log again.</p></div>
 
 <div class="box data"><span class="k">Sample data</span>
 <div class="io stack">
@@ -486,18 +477,16 @@ the shortcut of averaging the LOG returns instead
                  : -0.00313747   &lt;- wrong by 0.0000759, about 2.5%</pre></div>
 </div></div>
 
-<div class="box why"><span class="k">Why the long way round instead of averaging the log returns</span>
-<p>Averaging log returns describes a basket you never rebalance and whose weights
-drift. Averaging simple returns first describes a basket you rebalance to equal
-weights every single day, which is what "equal weight" is meant to mean. The gap
-looks tiny on one day, but the whole project measures the sum of squared
-portfolio returns, so a systematic bias in the portfolio return becomes a
-systematic bias in the target. The repository's own journal records this as an
-audit fix. A unit test,
+<div class="box why"><span class="k">Why it averages simple returns first</span>
+<p>Averaging log returns describes a basket whose weights drift because it is
+never rebalanced. Averaging simple returns first describes a basket rebalanced
+to equal weights each day. The one-day gap is small, but the project sums squared
+portfolio returns, so a consistent return bias also biases the target. The
+repository journal records this as an audit fix. A unit test,
 <code>test_equal_weight_portfolio_return_averages_simple_returns_first</code>,
-locks it in place.</p></div>
+keeps the correction in place.</p></div>
 
-<h3><code>compute_forward_realized_variance_target</code> &mdash; the label</h3>
+<h3><code>compute_forward_realized_variance_target</code> &mdash; create the label</h3>
 
 <pre>equal_weight_returns = compute_equal_weight_portfolio_log_returns(returns=returns)
 squared_equal_weight_returns = equal_weight_returns.pow(2)
@@ -509,9 +498,9 @@ forward_realized_variance = (
 
 <div class="box def"><span class="k">What it does</span>
 <p><b>Input:</b> the wide return matrix, a horizon $h$, and whether to annualize.
-<b>Output:</b> one number per date, holding how bumpy the <i>next</i> $h$ days
-turn out to be. <b>Role:</b> this is the value the models try to predict. The
-last $h$ rows are empty, because their future has not happened yet.</p></div>
+<b>Output:</b> one value per date for the realized variance of the <i>next</i>
+$h$ days. <b>Role:</b> this is what the models predict. The last $h$ rows are
+empty because their future has not happened yet.</p></div>
 
 <div class="box def"><span class="k">The formula</span>
 <p>$$\mathrm{RV}_{t,h}=\sum_{j=1}^{h}r_{p,t+j}^{2}
@@ -519,10 +508,9 @@ last $h$ rows are empty, because their future has not happened yet.</p></div>
 \mathrm{RV}^{\text{ann}}_{t,h}=\mathrm{RV}_{t,h}\cdot\frac{A}{h}$$</p>
 <p class="fnote">$r_{p,t+j}$ is the portfolio log return $j$ days after day $t$;
 $h$ is the horizon in trading days, 21 by default; $A$ is trading days per year,
-252 by default. Note the sum starts at $j=1$, not $j=0$: <b>day $t$'s own return
-is excluded</b>. The scale factor $A/h$ turns a 21-day sum into a per-year rate,
-so a value of 0.03 means an annualized volatility of $\sqrt{0.03}\approx 17.3$
-per cent.</p></div>
+252 by default. The sum starts at $j=1$, not $j=0$: <b>day $t$'s own return is
+excluded</b>. The factor $A/h$ annualizes a 21-day sum, so 0.03 means an
+annualized volatility of $\sqrt{0.03}\approx 17.3$ per cent.</p></div>
 
 <div class="box data"><span class="k">Sample data</span>
 <div class="io">
@@ -543,25 +531,26 @@ per cent.</p></div>
 of rows 1 through 21, multiply by $252/21=12$, and you get 0.02983902, which is
 exactly what the function returns.</p></div>
 </div>
-<p>4257 of 4278 rows carry a value. The 21 missing rows are the horizon.</p></div>
+<p>4257 of 4278 rows have a value. The final 21 rows are missing because they
+are the forecast horizon.</p></div>
 
 <div class="box warn"><span class="k">Trap: the sign of the shift</span>
-<p><code>.rolling(21).sum()</code> looks <i>backwards</i>: at row $p$ it holds the
-sum over rows $p-20$ through $p$. <code>.shift(-21)</code> then moves that value
-21 rows <i>earlier</i>, so it lands on row $p-21$ and covers rows $p-20$ through
-$p$, which are the 21 days strictly after $p-21$. Get the sign of the shift
-wrong, or shift by 20 instead of 21, and day $t$'s own return leaks into its own
-label. The test
+<p><code>.rolling(21).sum()</code> looks <i>backwards</i>: at row $p$ it holds
+rows $p-20$ through $p$; the same window is rows $p-20$ through $p$ before
+<code>.shift(-21)</code> moves its value 21 rows
+<i>earlier</i>, onto row $p-21$. Those are the 21 days strictly after
+$p-21$. A wrong shift sign, or shifting by 20 instead of 21, puts day $t$'s own
+return in its label. The test
 <code>test_forward_realized_variance_uses_future_returns_only</code> checks this
-on four hand-computed rows.</p></div>
+with four hand-computed rows.</p></div>
 
-<h2 id="est"><span class="sec-no">06</span>Three covariance estimators</h2>
+<h2 id="est"><span class="sec-no">06</span>Three covariance estimates</h2>
 
-<p>All three take the same window of returns &mdash; by default the last 63 days
-&times; 8 funds &mdash; and return an 8&times;8 covariance matrix with the fund
-names attached. Only the recipe differs.</p>
+<p>All three use the same return window: the last 63 days &times; 8 funds by
+default. Each returns an 8&times;8 covariance matrix with fund names attached. Only
+the method differs.</p>
 
-<h3><code>estimate_sample_covariance</code> &mdash; the plain estimate</h3>
+<h3><code>estimate_sample_covariance</code> &mdash; the basic estimate</h3>
 
 <pre>def estimate_sample_covariance(returns_window: pd.DataFrame) -&gt; pd.DataFrame:
     <span class="c">"""Estimate sample covariance from aligned return observations."""</span>
@@ -570,38 +559,36 @@ names attached. Only the recipe differs.</p>
 <div class="box def"><span class="k">The formula</span>
 <p>$$\hat{\Sigma}_{ij}=\frac{1}{T-1}\sum_{s=1}^{T}\left(r_{i,s}-\bar{r}_i\right)\left(r_{j,s}-\bar{r}_j\right)$$</p>
 <p class="fnote">$T$ is the number of days in the window (63); $r_{i,s}$ is fund
-$i$'s return on day $s$ of the window; $\bar{r}_i$ is that fund's average return
-over the window. Dividing by $T-1$ rather than $T$ is the standard correction
-for having estimated the average from the same data.</p></div>
+$i$'s return on day $s$; and $\bar{r}_i$ is its window average. Dividing by
+$T-1$ rather than $T$ corrects for estimating that average from the same data.</p></div>
 
-<h3><code>covariance_to_correlation</code> &mdash; strip the volatility out</h3>
+<h3><code>covariance_to_correlation</code> &mdash; remove the volatility scale</h3>
 
 <div class="box def"><span class="k">The formula</span>
 <p>$$C_{ij}=\frac{\Sigma_{ij}}{\sqrt{\Sigma_{ii}\,\Sigma_{jj}}}$$</p>
-<p class="fnote">$\Sigma_{ii}$ is fund $i$'s variance, so $\sqrt{\Sigma_{ii}}$ is
-its volatility. Dividing by both volatilities leaves a pure co-movement number
-between $-1$ and $+1$. The code clamps each variance at $10^{-12}$ before the
-square root so a dead, never-moving fund cannot cause a division by zero, then
-forces the matrix to be exactly symmetric and puts exact ones on the diagonal to
-undo floating-point drift.</p></div>
+<p class="fnote">$\Sigma_{ii}$ is fund $i$'s variance, so
+$\sqrt{\Sigma_{ii}}$ is its volatility. Dividing by both volatilities leaves a
+co-movement value between $-1$ and $+1$. The code clamps each variance at
+$10^{-12}$ before taking the square root, preventing division by zero for a fund
+that never moves. It then makes the matrix exactly symmetric and puts exact ones
+on the diagonal to remove floating-point drift.</p></div>
 
 <h3><code>estimate_ledoit_wolf_covariance</code> &mdash; pull the estimate toward a simple shape</h3>
 
 <div class="box gist"><span class="k">In plain words</span>
-<p>It blends the noisy sample matrix with a very simple, very stable matrix, and
-works out the blend proportion automatically.</p></div>
+<p>It blends the noisy sample matrix with a simple, stable matrix and chooses the
+blend proportion automatically.</p></div>
 
 <div class="box def"><span class="k">The formula</span>
 <p>$$\Sigma_{\text{LW}}=(1-\delta)\,\hat{\Sigma}+\delta\,F,\qquad F=\mu I,\qquad \mu=\frac{\operatorname{tr}(\hat{\Sigma})}{N}$$</p>
-<p class="fnote">$\hat{\Sigma}$ is the sample covariance; $F$ is the target shape,
-here a matrix with the average variance $\mu$ down the diagonal and zeros
-everywhere else; $I$ is the identity matrix; $\operatorname{tr}$ sums the
-diagonal; $N=8$ is the number of funds; $\delta$ between 0 and 1 is the shrinkage
-intensity, chosen by the Ledoit-Wolf rule to minimise expected squared error.
-The code does not implement this; it calls <code>sklearn.covariance.LedoitWolf</code>
-and only re-attaches the fund names.</p></div>
+<p class="fnote">$\hat{\Sigma}$ is the sample covariance. $F$ is the target:
+average variance $\mu$ on the diagonal and zeros elsewhere. $I$ is the identity
+matrix; $\operatorname{tr}$ sums the diagonal; $N=8$ is the number of funds; and
+$\delta$ is the shrinkage intensity, between 0 and 1. The Ledoit-Wolf rule
+chooses $\delta$ to minimise expected squared error. The code calls
+<code>sklearn.covariance.LedoitWolf</code> and re-attaches the fund names.</p></div>
 
-<h3><code>estimate_rmt_covariance</code> &mdash; delete the noise directions</h3>
+<h3><code>estimate_rmt_covariance</code> &mdash; filter noisy directions</h3>
 
 <pre>eigenvalues, eigenvectors = np.linalg.eigh(sample_correlation.to_numpy())
 
@@ -617,10 +604,10 @@ if noise_mask.any():
     eigenvalues[noise_mask] = float(eigenvalues[noise_mask].mean())</pre>
 
 <div class="box gist"><span class="k">In plain words</span>
-<p>Break the correlation matrix into independent directions. Mathematics tells
-you how large a direction can look purely by luck when you only have sixty-three
-days of data. Any direction below that size is treated as noise and flattened to
-the average of all the noise directions. Rebuild the matrix from what is left.</p></div>
+<p>Break the correlation matrix into independent directions. The theory gives a
+cutoff for how large a direction can appear by chance with only sixty-three days
+of data. Directions below the cutoff are treated as noise and set to their
+average. The matrix is then rebuilt.</p></div>
 
 <div class="box def"><span class="k">The formula</span>
 <p>Step 1, the noise ceiling from Marchenko-Pastur theory:</p>
@@ -634,16 +621,15 @@ average:</p>
 volatilities:</p>
 <p>$$\tilde{C}=V\,\operatorname{diag}(\tilde{\lambda})\,V^{\top},\qquad
 \Sigma_{\text{RMT}}=D\,\tilde{C}_{\text{norm}}\,D,\qquad D=\operatorname{diag}(s_1,\dots,s_N)$$</p>
-<p class="fnote">$T$ is days in the window (63); $N$ is funds (8);
-$q$ is the ratio of the two; $\lambda_+$ is the largest size a direction can
-reach from pure chance; $\lambda_m$ is the $m$-th eigenvalue of the sample
-<i>correlation</i> matrix, sorted ascending; $\mathcal{N}$ is the set of
-eigenvalues judged to be noise and $|\mathcal{N}|$ is how many there are; $V$
-holds the eigenvectors as columns; $\tilde{C}_{\text{norm}}$ is the rebuilt
-matrix rescaled so its diagonal is exactly one; $s_i$ is fund $i$'s sample
-standard deviation over the window. Flattening to the average rather than to
-zero keeps the total of all eigenvalues unchanged, which keeps the funds'
-variances honest.</p></div>
+<p class="fnote">$T$ is the number of days in the window (63); $N$ is the number
+of funds (8); $q$ is their ratio; and $\lambda_+$ is the largest direction size
+expected from chance alone. $\lambda_m$ is the $m$-th eigenvalue of the sample
+<i>correlation</i> matrix, sorted ascending. $\mathcal{N}$ is the set judged to
+be noise and $|\mathcal{N}|$ is its size. $V$ holds the eigenvectors as columns.
+$\tilde{C}_{\text{norm}}$ is the rebuilt matrix rescaled to a diagonal of one.
+$s_i$ is fund $i$'s sample standard deviation over the window. Replacing noise
+with its average, rather than zero, keeps the eigenvalue total unchanged and
+preserves the funds' variances.</p></div>
 
 <div class="box data"><span class="k">Sample data</span>
 <div class="io stack">
@@ -663,28 +649,26 @@ condition number of the covariance matrix:
   ledoit_wolf    9.1159
   rmt           91.0816       &lt;- cleaning helps, but far less than shrinkage</pre></div>
 </div>
-<p>Across all 4216 windows in the tracked data, <b>only one eigenvalue survives
-the cutoff in 4060 of them (96.3 per cent)</b>, and two survive in the remaining
-156. The random matrix theory filter is, in practice, collapsing eight funds to a
-single common factor almost every day.</p></div>
+<p>Across all 4216 tracked windows, <b>only one eigenvalue survives the cutoff in
+4060 of them (96.3 per cent)</b>; two survive in the remaining 156. In practice,
+the random matrix theory filter reduces the eight funds to one common factor on
+almost every day.</p></div>
 
-<div class="box flag"><span class="k">The weakness, stated honestly</span>
-<p>Marchenko-Pastur theory describes what happens when both the number of funds
-and the number of days grow large together. Here $N=8$. Eight is not large. The
-cutoff $\lambda_+ = 1.8397$ is also completely fixed, because $q=63/8$ never
-changes, so the filter applies the same ruler to a calm market and a crisis. The
-repository's own <code>GUIDE_OVERVIEW.md</code> calls this "a filtering
-heuristic", which is the right description.</p></div>
+<div class="box flag"><span class="k">The limitation</span>
+<p>Marchenko-Pastur theory describes what happens when the number of funds and
+days both grow large. Here $N=8$, which is not large. The cutoff
+$\lambda_+ = 1.8397$ is fixed because $q=63/8$ never changes, so the filter uses
+the same threshold in calm and crisis markets. <code>GUIDE_OVERVIEW.md</code>
+calls this "a filtering heuristic", which is accurate.</p></div>
 
-<div class="box warn"><span class="k">Trap: the condition number is mostly measuring volatility spread</span>
-<p>The condition number of the cleaned <i>correlation</i> matrix in the last
-window is 7.57. The condition number of the cleaned <i>covariance</i> matrix is
-91.08, twelve times larger. The extra factor is not noise; it is the spread of
-fund volatilities. Daily volatilities in that window run from 0.00261 (HYG) to
-0.01325 (IWM), a ratio of 5.08, and covariance scales with volatility squared,
-so $5.08^2 = 25.8$. Three of the seven features are covariance condition numbers.
-They are partly reporting how different the funds' volatilities are, which is not
-what "denoising quality" is supposed to mean.</p></div>
+<div class="box warn"><span class="k">Trap: the condition number also reflects volatility spread</span>
+<p>The cleaned <i>correlation</i> matrix has a condition number of 7.57 in the
+last window. The cleaned <i>covariance</i> matrix has 91.08, twelve times more.
+That difference is not noise; it comes from the spread of fund volatilities.
+Daily volatilities range from 0.00261 (HYG) to 0.01325 (IWM), a ratio of 5.08.
+Because covariance scales with squared volatility, $5.08^2 = 25.8$. Three of
+the seven features therefore partly measure volatility differences, not
+denoising quality.</p></div>
 
 <h2 id="feats"><span class="sec-no">07</span>The seven predictors &mdash; <code>covariance_features.py</code></h2>
 
@@ -701,16 +685,15 @@ what "denoising quality" is supposed to mean.</p></div>
     }</pre>
 
 <div class="box gist"><span class="k">In plain words</span>
-<p>Slide a 63-day window one day at a time across seventeen years. At every stop,
-build all three covariance matrices and squeeze them down to seven single
-numbers. Stamp the row with the last day of the window.</p></div>
+<p>Move a 63-day window one day at a time across seventeen years. At each stop,
+build the three covariance matrices and reduce them to seven numbers. Stamp the
+row with the window's last day.</p></div>
 
 <div class="box def"><span class="k">What it does</span>
 <p><b>Input:</b> the 4278&times;8 return matrix and a lookback length.
 <b>Output:</b> a 4216&times;7 table indexed by window-end date. <b>Role:</b> the
-left-hand side of the model. <b>Runtime:</b> about 8 seconds for the full
-history, because it fits 4216 &times; 3 = 12,648 covariance matrices in a plain
-Python loop.</p></div>
+model inputs. <b>Runtime:</b> about 8 seconds for the full history; it fits 4216
+&times; 3 = 12,648 covariance matrices in a plain Python loop.</p></div>
 
 <div class="box def"><span class="k">The formulas behind the seven columns</span>
 <p>Condition number of a covariance matrix, used three times:</p>
@@ -720,10 +703,10 @@ Python loop.</p></div>
 <p>Trailing annualized volatility of the basket:</p>
 <p>$$\sigma_t=\sqrt{A}\cdot\operatorname{sd}\!\left(r_{p,t-20},\dots,r_{p,t}\right)$$</p>
 <p class="fnote">$\lambda_{\max}$ and $\lambda_{\min}$ are the largest and
-smallest eigenvalues, so $\kappa$ is large when the matrix is close to being
-un-invertible; $C_{ij}$ is the correlation between funds $i$ and $j$; $N=8$, so
-there are $N(N-1)/2 = 28$ pairs; $\operatorname{sd}$ is the sample standard
-deviation with the $T-1$ divisor over the last 21 portfolio returns; $A=252$.</p></div>
+smallest eigenvalues, so $\kappa$ grows as the matrix becomes harder to invert.
+$C_{ij}$ is the correlation between funds $i$ and $j$; $N=8$, so there are
+$N(N-1)/2 = 28$ pairs. $\operatorname{sd}$ is the sample standard deviation,
+using the $T-1$ divisor over the last 21 portfolio returns; $A=252$.</p></div>
 
 <div class="scroll">
 <table>
@@ -739,8 +722,7 @@ deviation with the $T-1$ divisor over the last 21 portfolio returns; $A=252$.</p
 </tbody>
 </table>
 </div>
-<p class="fnote">Whole-sample statistics over all 4216 feature rows, computed
-from the real data.</p>
+<p class="fnote">Statistics over all 4216 feature rows from the real data.</p>
 
 <div class="box data"><span class="k">Sample data</span>
 <div class="io stack">
@@ -756,37 +738,32 @@ ledoit_wolf_to_sample_condition_ratio             0.033609   = 9.1159 / 271.2303
 rmt_to_sample_condition_ratio                     0.335809   = 91.0816 / 271.2303
 trailing_realized_volatility                      0.118000</pre></div>
 </div>
-<p>4278 return rows produce 4216 feature rows; the first 62 are consumed filling
-the lookback window, so the first feature row is stamped 2008-04-03.</p></div>
+<p>4278 return rows produce 4216 feature rows. The first 62 fill the lookback
+window, so the first feature row is stamped 2008-04-03.</p></div>
 
-<div class="box why"><span class="k">Why the row is stamped with the last day of the window, not the day after</span>
-<p>A feature row stamped $t$ is built from returns up to and including day $t$,
-so it is knowable at the close of day $t$. The target stamped $t$ covers days
-$t+1$ to $t+h$. Joining them on the date therefore lines up "everything I know
-at the close of $t$" against "what happens next". Shifting the feature stamp
-forward by one day would throw away information; shifting it backward would
-leak.</p></div>
+<div class="box why"><span class="k">Why the row uses the window's last day</span>
+<p>A feature row stamped $t$ uses returns through day $t$, so it is known at that
+day's close. The target stamped $t$ covers days $t+1$ to $t+h$. Joining on the
+date matches what was known at the close of $t$ with what happened next. Moving
+the feature stamp forward loses information; moving it backward leaks it.</p></div>
 
-<div class="box warn"><span class="k">Trap: the ratios divide by a number that is never small</span>
+<div class="box warn"><span class="k">Trap: the ratio denominator is never small</span>
 <p>The code guards the two ratio features with
 <code>max(sample_condition_number, 1e-12)</code>. That guard can never fire: a
-condition number is a ratio of the largest to the smallest eigenvalue of a
-positive matrix, so it is always at least 1. The guard is harmless but it also
-gives false comfort. The real risk with these ratios is the opposite one &mdash;
-the <i>denominator</i> blowing up to 1396 in a stressed window, which squashes
-the ratio toward zero and is exactly the regime you care about.</p></div>
+condition number is the ratio of the largest to smallest eigenvalue of a
+positive matrix, so it is always at least 1. The real risk is the opposite: the
+<i>denominator</i> can reach 1396 in a stressed window, pushing the ratio toward
+zero precisely when the regime matters most.</p></div>
 
 <h2 id="wf"><span class="sec-no">08</span>Timing and training &mdash; <code>walk_forward.py</code>, <code>baselines.py</code></h2>
 
-<p>This is the part of the repository that matters. Everything else is
-bookkeeping.</p>
+<p>This is the core of the repository. The other sections support it.</p>
 
 <h3>The timing problem in one picture</h3>
 
-<p>A label stamped on day $t$ is a sum over days $t+1$ to $t+h$. You do not know
-it until the close of day $t+h$. So when you stand at day $t_0$ and forecast, the
-most recent label you are allowed to have trained on is the one stamped
-$t_0 - h$. The $h-1$ labels stamped after that are still being formed.</p>
+<p>A label stamped on day $t$ sums returns from $t+1$ to $t+h$. It is unknown
+until the close of day $t+h$. At forecast time $t_0$, the latest usable label is
+therefore stamped $t_0-h$; the $h-1$ labels after it are still forming.</p>
 
 <pre>row:      ... 249  250  251 | 252 253 ... 271 | 272  273 ...
                              |                 |
@@ -797,7 +774,7 @@ $t_0 - h$. The $h-1$ labels stamped after that are still being formed.</p>
 label at row 251 covers returns 252..272, so it is known at row 272
                                                           ^ the first test row</pre>
 
-<h3><code>generate_walk_forward_slices</code> &mdash; where the gap comes from</h3>
+<h3><code>generate_walk_forward_slices</code> &mdash; create the gap</h3>
 
 <pre><span class="c"># A target at position t uses returns t+1 through t+h and is known at t+h.</span>
 <span class="c"># Starting at min_train_size + h - 1 preserves the requested count of fully</span>
@@ -816,10 +793,9 @@ while test_start + config.test_size &lt;= sample_count:
 \text{train}=[0,\;s-h+1),\qquad \text{test}=[s,\;s+n)$$</p>
 <p class="fnote">$m$ is <code>min_train_size</code> (252); $h$ is
 <code>target_horizon_days</code> (21); $\Delta$ is <code>step_size</code> (21);
-$n$ is <code>test_size</code> (21); $k$ counts folds from zero. The gap between
-the end of training and the start of testing is $s - (s-h+1) = h-1 = 20$ rows.
-The first test row is placed at $m+h-1$ rather than at $m$ precisely so that the
-training block still holds the full $m$ rows that were asked for.</p></div>
+$n$ is <code>test_size</code> (21); $k$ counts folds from zero. The gap is
+$s - (s-h+1) = h-1 = 20$ rows. The first test row starts at $m+h-1$, not $m$,
+so training still contains the requested $m$ rows.</p></div>
 
 <div class="box data"><span class="k">Sample data</span>
 <div class="io stack">
@@ -831,17 +807,17 @@ fold   1: train rows [0, 273)   test rows [293, 314)   purged 273..292  (20 rows
 fold 185: train rows [0, 4137)  test rows [4157, 4178) purged 4137..4156 (20 rows)</pre></div>
 </div>
 <p>186 folds &times; 21 test rows = 3906 forecasts. The last 17 rows (4178 to
-4194) are never tested, because they cannot fill a whole 21-row block.</p></div>
+4194) are not tested because they cannot fill a full 21-row block.</p></div>
 
-<div class="box why"><span class="k">Why chronological order alone is not enough</span>
-<p>The usual rule is "train on the past, test on the future", which here would
-mean training on rows 0 to 271 and testing from row 272. That is wrong. The label
-stamped on row 271 is a sum over rows 272 to 292, which are the very days being
-forecast. Training on it hands the model the answer. Ordinary
-<code>TimeSeriesSplit</code> from scikit-learn makes exactly this mistake with
-overlapping forward-looking labels. The purge of $h-1$ rows is the fix, and
+<div class="box why"><span class="k">Why chronological order is not enough</span>
+<p>The usual rule is "train on the past, test on the future". Here that would
+mean training on rows 0 through 271 and testing from row 272. It is wrong: the label
+on row 271 sums rows 272 to 292, the days being forecast. Training on it gives
+the model the answer. scikit-learn's <code>TimeSeriesSplit</code> makes the same
+mistake with overlapping forward-looking labels. Purging $h-1$ rows fixes it,
+and
 <code>test_walk_forward_slices_respect_train_before_test</code> asserts the
-arithmetic directly.</p></div>
+arithmetic.</p></div>
 
 <h3><code>predict_naive_last_value</code> &mdash; the benchmark</h3>
 
@@ -852,11 +828,11 @@ if prediction.isna().any():
 
 <div class="box def"><span class="k">The formula</span>
 <p>$$\hat{y}_t=\mathrm{RV}^{\text{ann}}_{t-h,\,h}$$</p>
-<p class="fnote">$\hat{y}_t$ is the forecast made at the close of day $t$;
+<p class="fnote">$\hat{y}_t$ is the forecast made at the close of day $t$.
 $\mathrm{RV}^{\text{ann}}_{t-h,h}$ is the annualized realized variance over days
-$t-h+1$ to $t$, that is, the month that has just finished. It became fully known
-at the close of day $t$ and not one minute earlier. In plain words: <b>next month
-will be as bumpy as the month that just ended</b>.</p></div>
+$t-h+1$ to $t$, the month that just ended. It became fully known at the close of
+day $t$. In plain words: <b>next month's variance will match the month that just
+ended</b>.</p></div>
 
 <div class="box data"><span class="k">Sample data</span>
 <div class="io">
@@ -873,20 +849,18 @@ will be as bumpy as the month that just ended</b>.</p></div>
 it updates every single day, it is not
 frozen for the block</pre></div>
 </div>
-<p>The forecast for 2009-05-01 is 0.086617, which is the label stamped
-2009-04-01 &mdash; exactly 21 rows earlier. That date is also fold 0's
-<code>train_end_timestamp</code>. The last training label and the first naive
-forecast are the same number, which is the cleanest possible demonstration that
-the purge is set to the right width.</p></div>
+<p>The forecast for 2009-05-01 is 0.086617, and the label stamped 2009-04-01 is
+also 0.086617 &mdash; exactly 21 rows earlier. That date is also fold 0's
+<code>train_end_timestamp</code>. The matching last training label and first
+naive forecast show that the purge has the right width.</p></div>
 
-<div class="box warn"><span class="k">Trap the raise prevents</span>
+<div class="box warn"><span class="k">What the error check prevents</span>
 <p>If the shift ran off the front of the series, <code>.loc[test_index]</code>
-would hand back empty values and the error metrics would quietly be computed over
-fewer rows, or over <code>NaN</code>. The explicit <code>raise</code> turns a
-silent distortion into a loud stop. It is one of very few places in the codebase
-that refuses to continue rather than coping.</p></div>
+would return empty values and the error metrics could use fewer rows or
+<code>NaN</code>. The explicit <code>raise</code> stops that silent distortion.
+It is one of the few places where the code refuses to continue.</p></div>
 
-<h3><code>run_walk_forward_models</code> &mdash; fit, forecast, floor</h3>
+<h3><code>run_walk_forward_models</code> &mdash; fit, forecast, clip</h3>
 
 <pre><span class="c"># Ridge is not scale invariant. Fit the scaler on each training fold so</span>
 <span class="c"># condition numbers and decimal volatility receive comparable penalties.</span>
@@ -906,7 +880,7 @@ ridge_prediction = pd.Series(
 )</pre>
 
 <div class="box def"><span class="k">The formula</span>
-<p>Standardize each predictor using the training fold's own average and spread:</p>
+<p>Standardize each predictor with the training fold's average and spread:</p>
 <p>$$z_{j}=\frac{x_{j}-\mu_{j}^{\text{train}}}{\sigma_{j}^{\text{train}}}$$</p>
 <p>Then fit ridge regression, which is least squares with a penalty on the size
 of the coefficients:</p>
@@ -915,27 +889,25 @@ of the coefficients:</p>
 \hat{\beta}=\left(Z^{\top}Z+\alpha I\right)^{-1}Z^{\top}y$$</p>
 <p>Finally clip the forecast into the range a variance can live in:</p>
 <p>$$\hat{y}=\max\!\left(0,\;z^{\top}\hat{\beta}+\hat{\beta}_0\right)$$</p>
-<p class="fnote">$x_j$ is the raw value of feature $j$; $\mu_j^{\text{train}}$
-and $\sigma_j^{\text{train}}$ are that feature's average and standard deviation
-<b>computed only from the training rows of that fold</b>; $z_j$ is the
-standardized value; $Z$ is the matrix of standardized training features; $y$ is
-the vector of training labels; $\alpha$ is <code>--ridge-alpha</code>, fixed at
-1.0; $\beta$ is the coefficient vector and $\hat\beta_0$ the intercept; $I$ is
-the identity matrix. Setting the derivative of the objective to zero and solving
-for $\beta$ gives the closed form shown, which is what scikit-learn computes.</p></div>
+<p class="fnote">$x_j$ is feature $j$ before scaling; $\mu_j^{\text{train}}$
+and $\sigma_j^{\text{train}}$ are its average and standard deviation
+<b>computed only from that fold's training rows</b>; $z_j$ is the standardized
+value; $Z$ is the standardized training matrix; $y$ is the training-label
+vector; $\alpha$ is <code>--ridge-alpha</code>, fixed at 1.0; $\beta$ is the
+coefficient vector; $\hat\beta_0$ is the intercept; and $I$ is the identity
+matrix. Solving the objective's derivative for $\beta$ gives the displayed form,
+which scikit-learn computes.</p></div>
 
-<div class="box why"><span class="k">Why the scaler is inside the fold and not outside</span>
-<p>Two reasons, and the second is the one people miss.</p>
-<p><b>Scale.</b> The seven features live on wildly different scales: condition
-numbers reach 1396 while trailing volatility sits near 0.12. Ridge penalizes all
-coefficients equally, so without standardization the condition-number
-coefficients would be crushed to nothing purely because their inputs are large.
-The penalty would be meaningless.</p>
-<p><b>Leakage.</b> If you standardized once over the whole history, the average
-and spread used on 2009 data would already contain 2020's numbers. That is a
-mild but real leak of the future into the past. Fitting the scaler inside
-<code>make_pipeline</code> means <code>.fit()</code> only ever sees the training
-rows of that fold.</p></div>
+<div class="box why"><span class="k">Why the scaler stays inside each fold</span>
+<p>There are two reasons:</p>
+<p><b>Scale.</b> The seven features have very different scales: condition
+numbers reach 1396 while trailing volatility is near 0.12. Ridge penalizes all
+coefficients equally. Without standardization, large condition-number inputs
+would dominate the penalty and make it meaningless.</p>
+<p><b>Leakage.</b> A scaler fitted over the whole history would use 2020 values
+when standardizing 2009 data. That leaks future information into the past.
+Keeping it inside <code>make_pipeline</code> means <code>.fit()</code> sees only
+the training rows for that fold.</p></div>
 
 <div class="box data"><span class="k">Sample data</span>
 <div class="io stack">
@@ -959,17 +931,16 @@ ledoit_wolf_to_sample_condition_ratio  -0.002349
 __intercept__                           0.038254</pre></div>
 </div>
 <p>The trailing volatility coefficient is roughly four times the largest
-covariance-diagnostic coefficient. The model mostly rediscovers "volatility
-persists", which is the naive rule in different clothing, and then adds noise on
-top of it.</p></div>
+covariance-diagnostic coefficient. The model mostly rediscovers persistent
+volatility, the same pattern used by the naive rule, and adds noise.</p></div>
 
-<div class="box flag"><span class="k">The weakness, stated honestly</span>
+<div class="box flag"><span class="k">The calibration problem</span>
 <p>The zero floor fires on <b>784 of 3906 forecasts, 20.1 per cent</b>. The most
 negative raw forecast is $-0.1555$, while the average realized value is
-$0.0158$. A model that predicts an impossible number one time in five is not
-being lightly corrected at the edges; it is badly miscalibrated and the clip is
-hiding how badly. The clip is applied before scoring, so the reported ridge
-error is <i>better</i> than the unclipped model deserves, and it still loses.</p></div>
+$0.0158$. A model that predicts an impossible value one time in five is badly
+miscalibrated; the clip hides the extent of the problem. Because clipping happens
+before scoring, the reported ridge error is <i>better</i> than the raw model's
+error, and it still loses.</p></div>
 
 <h2 id="eval"><span class="sec-no">09</span>Scoring and output files</h2>
 
@@ -977,23 +948,21 @@ error is <i>better</i> than the unclipped model deserves, and it still loses.</p
 <p>$$\mathrm{MAE}=\frac{1}{n}\sum_{t=1}^{n}\left|y_t-\hat{y}_t\right|
 \qquad
 \mathrm{RMSE}=\sqrt{\frac{1}{n}\sum_{t=1}^{n}\left(y_t-\hat{y}_t\right)^{2}}$$</p>
-<p class="fnote">$y_t$ is the realized annualized variance, $\hat{y}_t$ the
-forecast, $n=3906$ the number of scored days. Mean absolute error treats every
-miss in proportion to its size. Root mean squared error squares first, so a few
-large misses dominate it. Both are in the same units as the target, so they can
-be compared directly against the average target value of 0.0158.</p></div>
+<p class="fnote">$y_t$ is the realized annualized variance; $\hat{y}_t$ is the
+forecast; and $n=3906$ is the number of scored days. Mean absolute error (MAE)
+weights each miss by its size. Root mean squared error (RMSE) squares each miss
+first, so a few large misses dominate. Both use the target's units and can be
+compared directly with the average target value of 0.0158.</p></div>
 
-<div class="box why"><span class="k">Why the two measures disagree in size but not in ranking</span>
-<p>On mean absolute error the naive rule wins by a wide margin, 0.0106 against
-0.0184. On root mean squared error the gap almost closes, 0.0340 against 0.0354.
-Both are far larger than the mean absolute error because realized variance has
-rare enormous spikes, and squaring lets those spikes swamp everything else.
-Neither model predicts the spikes, so on that measure both look similarly poor.
-The honest reading is that the ridge model is clearly worse on typical days and
-about equally helpless on the days that matter.</p></div>
+<div class="box why"><span class="k">Why the measures rank the models the same</span>
+<p>For mean absolute error, the naive rule wins by a wide margin: 0.0106 versus
+0.0184. For root mean squared error, the gap nearly closes: 0.0340 versus 0.0354.
+Both models miss rare, large variance spikes. Squaring those misses makes them
+dominate the second measure, so both models look similarly poor there. Ridge is
+clearly worse on typical days and about as weak on the worst days.</p></div>
 
-<p><code>export_offline_demo_artifacts</code> writes six files into the output
-directory, creating it if needed:</p>
+<p><code>export_offline_demo_artifacts</code> writes six files to the output
+directory, creating it when needed:</p>
 
 <div class="scroll">
 <table>
@@ -1011,38 +980,35 @@ directory, creating it if needed:</p>
 
 <div class="box warn"><span class="k">Trap</span>
 <p>Keeping both <code>ridge_raw_prediction</code> and
-<code>ridge_prediction</code> in the output is a deliberate audit trail: it is
-the only way anyone can find out that the floor fired one time in five. If the
-raw column were dropped, the clip would be invisible. Do not remove it to
-tidy up the file.</p></div>
+<code>ridge_prediction</code> creates an audit trail. It shows that the floor
+fired one time in five. If the raw column were removed, the clip would be
+invisible.</p></div>
 
 <h2 id="ch"><span class="sec-no">10</span>The optional database refresh &mdash; <code>clickhouse_refresh.py</code></h2>
 
 <div class="box gist"><span class="k">In plain words</span>
-<p>One command that goes to a ClickHouse database, pulls prices, and rewrites the
-parquet file and its metadata. Nothing else in the project calls it.</p></div>
+<p>One command connects to a ClickHouse database, pulls prices, and rewrites the
+parquet file and its metadata. Nothing else calls it.</p></div>
 
 <div class="box def"><span class="k">What it does</span>
-<p><b>Input:</b> connection settings, a date range, and a list of fund symbols.
+<p><b>Input:</b> connection settings, a date range, and fund symbols.
 <b>Output:</b> overwrites <code>raw_prices.parquet</code> and
-<code>raw_prices.metadata.json</code>. <b>Role:</b> a one-time escape hatch. The
-metadata it writes is exactly the contract that <code>validate_raw_cache</code>
-checks, so the two ends match by construction.</p></div>
+<code>raw_prices.metadata.json</code>. <b>Role:</b> a one-time refresh path. The
+metadata it writes is the same contract that <code>validate_raw_cache</code>
+checks, so both ends agree.</p></div>
 
 <div class="box flag"><span class="k">Two things to know before running it</span>
-<p><b>It overwrites without asking.</b> There is no backup, no confirmation, and
-no dry-run. If the query returns fewer rows than expected, the tracked reference
-dataset is gone and the whole repository's results change.</p>
-<p><b>The password is a command-line flag.</b> That puts the database password
-into your shell history and into the process list, where any other user on the
-machine can read it. There is a <code>.env</code> file in the repository, but no
-code reads it, so it does not help.</p></div>
+<p><b>It overwrites without asking.</b> There is no backup, confirmation, or
+dry-run. If the query returns fewer rows than expected, the tracked reference
+dataset is replaced and the repository's results change.</p>
+<p><b>The password is a command-line flag.</b> It goes into your shell history
+and process list, where other users on the machine may read it. The repository
+has a <code>.env</code> file, but no code reads it.</p></div>
 
 <h2 id="fixes"><span class="sec-no">11</span>Fixes applied</h2>
 
-<p>Two genuine defects were found while writing this page and were fixed. Both
-were verified by re-running the full test suite (23 passed), <code>ruff</code>,
-and <code>mypy</code>.</p>
+<p>Two genuine defects were found and fixed. Both were verified by rerunning the
+full test suite (23 passed), <code>ruff</code>, and <code>mypy</code>.</p>
 
 <div class="scroll">
 <table>
@@ -1052,43 +1018,40 @@ and <code>mypy</code>.</p>
 <td><code>src/covariance_denoiser/cli.py</code></td>
 <td><span class="chip c-bug">broken path</span> The defaults for
 <code>--data-dir</code> and <code>--output-dir</code> were relative paths
-(<code>data/raw</code>, <code>outputs/demo</code>), so the installed command only
-worked when your shell happened to be sitting in the repository root. The
-project's own helper <code>default_raw_data_dir()</code>, which resolves the root
-from the module's file location, was written but never reached because the
-command line always overrode it.</td>
+(<code>data/raw</code>, <code>outputs/demo</code>). The installed command worked
+only when the shell was in the repository root. The existing helper
+<code>default_raw_data_dir()</code> resolved the root from the module's location,
+but the command line always overrode it.</td>
 <td>Running <code>covariance-denoiser run-offline-demo</code> from
 <code>/tmp</code> failed with
 <code>FileNotFoundError: Missing file: data/raw/raw_prices.parquet</code>.</td>
 <td>Anchored both defaults to the repository root with the existing
 <code>default_raw_data_dir()</code> and <code>project_root_from_module()</code>
-helpers. Verified: the same command from <code>/tmp</code> now completes and
-writes all six artifacts. Behaviour when run from the repository root is
-unchanged, because the paths resolve to the same files.</td>
+helpers. The same command from <code>/tmp</code> now completes and writes all
+six artifacts. Behaviour from the repository root is unchanged because the
+paths still resolve to the same files.</td>
 </tr>
 <tr>
 <td><code>src/covariance_denoiser/data/clickhouse_refresh.py</code></td>
 <td><span class="chip c-bug">resource leak</span> The ClickHouse client was
-created and queried but never closed, so its HTTP session stayed open, and a
-query that raised would leave the connection dangling.</td>
+created and queried but never closed. Its HTTP session stayed open, and a failed
+query left the connection dangling.</td>
 <td>Code inspection: <code>client = clickhouse_connect.get_client(...)</code>
 with no matching <code>close()</code> and no <code>try/finally</code>.</td>
 <td>Wrapped the client in <code>contextlib.closing</code> so the session is
-released on both the success and the failure path.</td>
+released on both success and failure.</td>
 </tr>
 </tbody>
 </table>
 </div>
 
 <div class="box why"><span class="k">What was deliberately not changed</span>
-<p>The quantitative logic was checked hard for look-ahead bias, index
-misalignment, off-by-one errors in the target shift and the fold boundaries,
-wrong annualization factors, mutable default arguments, and swallowed
-exceptions. <b>None were found.</b> The target shift, the purge width, the naive
-rule's lag, and the fold arithmetic were all confirmed against hand-computed
-values on the real data. The rough edges listed in sections 12 to 14 are real
-but are either error-message quality or design choices, not defects, and
-changing them would have meant restructuring code beyond the brief.</p></div>
+<p>The quantitative logic was checked for look-ahead bias, index misalignment,
+off-by-one errors in the target shift and fold boundaries, wrong annualization
+factors, mutable default arguments, and swallowed exceptions. <b>None were
+found.</b> Hand calculations on the real data confirmed the target shift, purge
+width, naive-rule lag, and fold arithmetic. The rough edges in sections 12 to 14
+are real, but they concern error messages or design choices rather than defects.</p></div>
 
 <h2 id="callgraph"><span class="sec-no">12</span>Call graph</h2>
 
@@ -1135,37 +1098,37 @@ changing them would have meant restructuring code beyond the brief.</p></div>
 refresh_raw_cache_from_clickhouse(...)              <span class="c">[data/clickhouse_refresh.py]</span>
  +-- _write_raw_cache()                             <span class="c"># only reachable from the second CLI command</span></pre>
 
-<p class="fnote">Note the one place two branches meet:
-<code>compute_equal_weight_portfolio_log_returns</code> is called both by the
-target builder and by the feature builder. It is the only function shared
-between the left-hand side and the right-hand side of the regression.</p>
+<p class="fnote">The two branches meet at
+<code>compute_equal_weight_portfolio_log_returns</code>, which is called by both
+the target builder and feature builder. It is the only function shared by the
+regression's inputs and target.</p>
 
 <h2 id="edge"><span class="sec-no">13</span>Edge cases</h2>
 
 <div class="scroll">
 <table>
-<thead><tr><th>Situation</th><th>What would go wrong</th><th>What handles it</th></tr></thead>
+<thead><tr><th>Situation</th><th>Risk</th><th>What handles it</th></tr></thead>
 <tbody>
-<tr><td>Price file swapped for a different one</td><td>Results change silently and nobody notices</td><td><span class="chip c-veto">stops</span> <code>validate_raw_cache</code> checks row count, symbols, dates and flags, then <code>load_raw_prices</code> raises <code>FileNotFoundError</code></td></tr>
-<tr><td>A fund missing on one date</td><td>Misaligned returns</td><td><span class="chip c-drop">drops</span> <code>dropna(how="any")</code> removes the whole date, silently, for all eight funds</td></tr>
+<tr><td>Price file swapped for a different one</td><td>Results change without notice</td><td><span class="chip c-veto">stops</span> <code>validate_raw_cache</code> checks row count, symbols, dates and flags, then <code>load_raw_prices</code> raises <code>FileNotFoundError</code></td></tr>
+<tr><td>A fund missing on one date</td><td>Returns become misaligned</td><td><span class="chip c-drop">drops</span> <code>dropna(how="any")</code> removes the whole date, silently, for all eight funds</td></tr>
 <tr><td>Last 21 dates have no future</td><td><code>NaN</code> labels reaching the model</td><td><span class="chip c-drop">drops</span> the <code>.dropna()</code> in <code>build_modeling_frame</code>; 4278 rows become 4195 after joining with the 4216 feature rows</td></tr>
 <tr><td>A fund with zero variance in a window</td><td>Division by zero making a correlation matrix</td><td><span class="chip c-drop">clamps</span> <code>MIN_COVARIANCE_VARIANCE = 1e-12</code> before the square root, then <code>nan_to_num</code></td></tr>
-<tr><td>Every eigenvalue judged to be noise</td><td>Nothing left to rebuild from</td><td><span class="chip c-drop">handles</span> <code>if noise_mask.any()</code> flattens them all to their common average, giving a matrix proportional to the identity, which is still valid</td></tr>
-<tr><td>Ridge forecasts a negative variance</td><td>An impossible number scored as if real</td><td><span class="chip c-drop">clips</span> <code>.clip(lower=0.0)</code>; fires on 20.1 per cent of forecasts, and the raw value is kept in the output so you can see it</td></tr>
+<tr><td>Every eigenvalue judged to be noise</td><td>Nothing remains to rebuild</td><td><span class="chip c-drop">handles</span> <code>if noise_mask.any()</code> sets them all to their average, giving a valid matrix proportional to the identity</td></tr>
+<tr><td>Ridge forecasts a negative variance</td><td>An impossible value is scored</td><td><span class="chip c-drop">clips</span> <code>.clip(lower=0.0)</code>; fires on 20.1 per cent of forecasts, and keeps the raw value in the output</td></tr>
 <tr><td>Naive rule has no observable lagged label</td><td>Metrics computed over fewer rows</td><td><span class="chip c-veto">stops</span> explicit <code>raise ValueError</code> in <code>predict_naive_last_value</code></td></tr>
-<tr><td>Not enough rows for even one fold</td><td>&mdash;</td><td><span class="chip c-bug">unclear</span> <code>generate_walk_forward_slices</code> returns <code>[]</code> and <code>pd.concat</code> then raises <code>ValueError: No objects to concatenate</code>, which does not name the real problem</td></tr>
-<tr><td>Lookback longer than the whole history</td><td>&mdash;</td><td><span class="chip c-bug">unclear</span> the feature loop produces no rows and <code>set_index("timestamp")</code> raises <code>KeyError: "None of ['timestamp'] are in the columns"</code></td></tr>
-<tr><td><code>step_size</code> smaller than <code>test_size</code></td><td>The same day scored more than once, inflating the sample</td><td><span class="chip c-never">nothing</span> no check; both are independent flags</td></tr>
-<tr><td>Output directory already holds a previous run</td><td>Mixing two runs' results</td><td><span class="chip c-never">nothing</span> files are overwritten in place with no warning</td></tr>
+<tr><td>Not enough rows for even one fold</td><td>&mdash;</td><td><span class="chip c-bug">unclear</span> <code>generate_walk_forward_slices</code> returns <code>[]</code>, then <code>pd.concat</code> raises <code>ValueError: No objects to concatenate</code> without naming the cause</td></tr>
+<tr><td>Lookback longer than the whole history</td><td>&mdash;</td><td><span class="chip c-bug">unclear</span> the feature loop produces no rows, then <code>set_index("timestamp")</code> raises <code>KeyError: "None of ['timestamp'] are in the columns"</code></td></tr>
+<tr><td><code>step_size</code> smaller than <code>test_size</code></td><td>The same day is scored more than once</td><td><span class="chip c-never">nothing</span> no check; both are independent flags</td></tr>
+<tr><td>Output directory already holds a previous run</td><td>Two runs' results are mixed</td><td><span class="chip c-never">nothing</span> files are overwritten in place with no warning</td></tr>
 </tbody>
 </table>
 </div>
 
 <div class="legend">
 <span><span class="chip c-veto">stops</span> refuses to continue</span>
-<span><span class="chip c-drop">drops</span> silently handles and carries on</span>
-<span><span class="chip c-bug">unclear</span> fails, but the message does not name the cause</span>
-<span><span class="chip c-never">nothing</span> not handled at all</span>
+<span><span class="chip c-drop">drops</span> removes the case and continues</span>
+<span><span class="chip c-bug">unclear</span> fails without naming the cause</span>
+<span><span class="chip c-never">nothing</span> has no handling</span>
 </div>
 
 <h2 id="traps"><span class="sec-no">14</span>Gotchas and traps</h2>
@@ -1174,16 +1137,16 @@ between the left-hand side and the right-hand side of the regression.</p>
 <table>
 <thead><tr><th>Construct</th><th>What it does</th><th>The trap</th></tr></thead>
 <tbody>
-<tr><td><code>.rolling(h).sum().shift(-h)</code></td><td>Sum the next $h$ values and stamp the result on today</td><td>The rolling window looks backwards and the shift is negative. Two sign flips that cancel. Change either one and today's own return leaks into today's label.</td></tr>
-<tr><td><code>np.expm1</code> / <code>np.log1p</code></td><td>Convert log returns to simple returns and back</td><td>They are not decoration for <code>exp(x)-1</code> and <code>log(1+x)</code>. They keep precision for small $x$, which is exactly the size of a daily return. Also, the round trip only makes sense if you average in between; averaging log returns directly gives a different, wrong portfolio.</td></tr>
-<tr><td><code>make_pipeline(StandardScaler(), Ridge())</code></td><td>Standardize then fit, as one object</td><td>The point is not tidiness. It guarantees <code>.fit()</code> touches training rows only. Standardizing the whole frame first and then splitting would leak the future's average and spread backwards, and would look identical in a diff.</td></tr>
-<tr><td><code>slice(0, train_stop)</code> with <code>train_stop = s - h + 1</code></td><td>Cut off training $h-1$ rows before the test block</td><td>A reviewer who does not know why the gap is there is likely to "fix" it back to <code>slice(0, s)</code> and get a much better-looking result. That result would be leakage.</td></tr>
-<tr><td><code>target.shift(h)</code> in the naive rule</td><td>Look up the label from $h$ rows ago</td><td>It shifts by <b>rows of the aligned frame</b>, not by calendar days. That equals $h$ trading days only because the aligned frame has no internal gaps. Introduce a data source where a middle row drops out and the lag quietly stops being $h$ days.</td></tr>
+<tr><td><code>.rolling(h).sum().shift(-h)</code></td><td>Sum the next $h$ values and stamp the result on today</td><td>The rolling window looks backward and the shift is negative. Change either one and today's return leaks into today's label.</td></tr>
+<tr><td><code>np.expm1</code> / <code>np.log1p</code></td><td>Convert log returns to simple returns and back</td><td>They preserve precision for small $x$, the size of a daily return. They implement <code>exp(x)-1</code> and <code>log(1+x)</code>; the round trip also requires averaging in between. Averaging log returns directly gives the wrong portfolio.</td></tr>
+<tr><td><code>make_pipeline(StandardScaler(), Ridge())</code></td><td>Standardize then fit, as one object</td><td>It guarantees <code>.fit()</code> uses training rows only. Standardizing the full frame before splitting would leak the future's average and spread into the past.</td></tr>
+<tr><td><code>slice(0, train_stop)</code> with <code>train_stop = s - h + 1</code></td><td>Cut off training $h-1$ rows before the test block</td><td>Changing it to <code>slice(0, s)</code> gives a better-looking but leaked result.</td></tr>
+<tr><td><code>target.shift(h)</code> in the naive rule</td><td>Look up the label from $h$ rows ago</td><td>It shifts by <b>rows of the aligned frame</b>, not calendar days. That equals $h$ trading days only because the aligned frame has no internal gaps.</td></tr>
 <tr><td><code>DEFAULT_TRAILING_VOL_DAYS = 21</code></td><td>Length of the trailing volatility feature</td><td>Hard-coded, not a flag. Change <code>--horizon-days</code> and this stays at 21 while everything else moves, silently breaking the correspondence with the benchmark.</td></tr>
-<tr><td><code>max(cond, 1e-12)</code></td><td>Guard the ratio denominators</td><td>Dead code. A condition number is always at least 1, so it never fires. It reads like protection but protects nothing.</td></tr>
-<tr><td><code>pd.Series(existing_series, index=idx)</code></td><td>Rebuild the clipped forecast series</td><td>Constructing a Series from a Series re-indexes <b>by label</b>, not by position. Correct here because the index is identical, but if the index ever differed you would get silent <code>NaN</code>s, not an error.</td></tr>
-<tr><td><code>try: import clickhouse_connect / except ImportError</code></td><td>Treat the database driver as optional</td><td><code>clickhouse-connect</code> is a hard dependency in <code>pyproject.toml</code>, so the fallback branch can never run in a synced environment. Harmless, but it makes the driver look optional when it is not.</td></tr>
-<tr><td><code>project_root_from_module()</code>, four <code>.parent</code> calls</td><td>Find the repository root from the module's own location</td><td>It assumes the package is used from a source checkout. Install the wheel into site-packages and it walks up to a directory that has no <code>data/raw</code> in it.</td></tr>
+<tr><td><code>max(cond, 1e-12)</code></td><td>Guard the ratio denominators</td><td>Dead code. A condition number is always at least 1, so the guard never fires.</td></tr>
+<tr><td><code>pd.Series(existing_series, index=idx)</code></td><td>Rebuild the clipped forecast series</td><td>A Series is re-indexed <b>by label</b>, not position. It works here because the index is identical; a different index would silently produce <code>NaN</code>s.</td></tr>
+<tr><td><code>try: import clickhouse_connect / except ImportError</code></td><td>Treat the database driver as optional</td><td><code>clickhouse-connect</code> is required in <code>pyproject.toml</code>, so the fallback cannot run in a synced environment. It makes a required driver look optional.</td></tr>
+<tr><td><code>project_root_from_module()</code>, four <code>.parent</code> calls</td><td>Find the repository root from the module's location</td><td>It assumes a source checkout. A wheel installed in site-packages would lead to a directory without <code>data/raw</code>.</td></tr>
 </tbody>
 </table>
 </div>
@@ -1194,16 +1157,16 @@ between the left-hand side and the right-hand side of the regression.</p>
 <table>
 <thead><tr><th>The question</th><th>The answer</th></tr></thead>
 <tbody>
-<tr><td>"Where exactly is look-ahead bias prevented?"</td><td>Three places, and they have to agree. (1) The target's <code>.shift(-h)</code> starts the sum at $t+1$, so a label never contains its own day. (2) <code>generate_walk_forward_slices</code> cuts training off $h-1$ rows before the test block, so no training label's window overlaps the test period. (3) <code>StandardScaler</code> lives inside the fold pipeline, so the standardization statistics come only from training rows.</td></tr>
-<tr><td>"Prove the purge width is right, do not just assert it."</td><td>Fold 0's last training row is 2009-04-01 and its first test row is 2009-05-01. The naive forecast for 2009-05-01 is 0.086617, and the label stamped 2009-04-01 is also 0.086617. The last label you are allowed to train on and the last label you are allowed to know are the same row. One row wider and you would be using the future.</td></tr>
-<tr><td>"Why not just use scikit-learn's <code>TimeSeriesSplit</code>?"</td><td>It splits in order but places the test block immediately after training. With labels that look 21 days forward, the last 20 training labels are partly made of test-period returns. This code purges those 20 rows; <code>TimeSeriesSplit</code> does not.</td></tr>
-<tr><td>"Are the reported errors statistically valid?"</td><td>No, and the README says so. Neighbouring 21-day targets share 20 of their 21 days, so the 3906 forecasts are nowhere near 3906 independent observations. MAE and RMSE here are descriptive comparisons, not a significance test. A proper test would need an overlap-aware standard error such as Newey-West.</td></tr>
-<tr><td>"Why is <code>ridge_raw_prediction</code> in the output when you also report the clipped one?"</td><td>So the clip is auditable. It fires on 784 of 3906 forecasts (20.1 per cent), with a worst raw value of $-0.1555$ against an average realized value of $0.0158$. Without that column nobody could tell how much work the floor is doing.</td></tr>
-<tr><td>"What happens if I set <code>--horizon-days 63</code>?"</td><td>The target window, the purge width, and the naive rule's lag all move to 63 automatically. <code>DEFAULT_TRAILING_VOL_DAYS</code> does not; it stays at 21. Nothing errors, and the trailing volatility feature quietly stops matching the horizon.</td></tr>
-<tr><td>"How long does a run take?"</td><td>About 20 seconds end to end on the tracked data. Roughly 8 of those are the feature loop, which fits 12,648 covariance matrices one at a time in Python. The 186 ridge fits are negligible by comparison.</td></tr>
-<tr><td>"Why does the random matrix theory filter help conditioning less than shrinkage?"</td><td>Two reasons. It filters the correlation matrix and then multiplies the volatilities back in, and the spread of fund volatilities alone contributes a factor of about 26 to the condition number in the last window. Ledoit-Wolf shrinks the whole covariance matrix, volatilities included. Comparing 91.08 to 9.12 is therefore not comparing like with like.</td></tr>
-<tr><td>"Is eight funds enough for random matrix theory?"</td><td>No. The theory is asymptotic in both $N$ and $T$, and $N=8$. On the real data the filter keeps exactly one eigenvalue in 96.3 per cent of windows, so it is effectively a one-factor model, not a nuanced clean-up.</td></tr>
-<tr><td>"Where does the run write its files if I do not pass <code>--output-dir</code>?"</td><td>Into <code>outputs/demo</code> under the repository root, resolved from the package's own file location. Before the fix in section 11 it was resolved from your current shell directory instead.</td></tr>
+<tr><td>"Where exactly is look-ahead bias prevented?"</td><td>Three places. (1) The target's <code>.shift(-h)</code> starts the sum at $t+1$, so a label excludes its own day. (2) <code>generate_walk_forward_slices</code> stops training $h-1$ rows before testing, so no training label overlaps the test period. (3) <code>StandardScaler</code> is inside the fold pipeline, so its statistics use training rows only.</td></tr>
+<tr><td>"Prove the purge width is right, do not just assert it."</td><td>Fold 0 ends training on 2009-04-01 and starts testing on 2009-05-01. The naive forecast for 2009-05-01 is 0.086617, the same as the label stamped 2009-04-01. The last usable training label and the latest observable label are the same row. One wider row would use future information.</td></tr>
+<tr><td>"Why not just use scikit-learn's <code>TimeSeriesSplit</code>?"</td><td>It preserves order but puts testing immediately after training. With labels that look 21 days forward, the last 20 training labels partly use test-period returns. This code purges those 20 rows; <code>TimeSeriesSplit</code> does not.</td></tr>
+<tr><td>"Are the reported errors statistically valid?"</td><td>No, as the README says. Neighbouring 21-day targets share 20 of their 21 days, so the 3906 forecasts are not 3906 independent observations. MAE and RMSE are descriptive comparisons, not a significance test. A proper test would need an uncertainty estimate that accounts for overlap, such as Newey-West.</td></tr>
+<tr><td>"Why is <code>ridge_raw_prediction</code> in the output when you also report the clipped one?"</td><td>To make clipping auditable. It fires on 784 of 3906 forecasts (20.1 per cent); the worst raw value is $-0.1555$ versus an average realized value of $0.0158$. Without that column, the floor's effect would be hidden.</td></tr>
+<tr><td>"What happens if I set <code>--horizon-days 63</code>?"</td><td>The target window, purge width, and naive lag move to 63 automatically. <code>DEFAULT_TRAILING_VOL_DAYS</code> stays at 21. Nothing errors, but trailing volatility no longer matches the horizon.</td></tr>
+<tr><td>"How long does a run take?"</td><td>About 20 seconds on the tracked data. Roughly 8 seconds are spent in the feature loop, which fits 12,648 covariance matrices one at a time in Python. The 186 ridge fits take little time by comparison.</td></tr>
+<tr><td>"Why does the random matrix theory filter help conditioning less than shrinkage?"</td><td>It filters the correlation matrix, then restores the volatilities. Their spread alone adds a factor of about 26 to the last window's condition number. Ledoit-Wolf shrinks the full covariance matrix, including volatilities. The values 91.08 and 9.12 therefore measure different things.</td></tr>
+<tr><td>"Is eight funds enough for random matrix theory?"</td><td>No. The theory assumes both $N$ and $T$ are large, but $N=8$. On the real data, the filter keeps one eigenvalue in 96.3 per cent of windows, so it acts like a one-factor model rather than a detailed clean-up.</td></tr>
+<tr><td>"Where does the run write its files if I do not pass <code>--output-dir</code>?"</td><td>To <code>outputs/demo</code> under the repository root, resolved from the package's file location. Before section 11, it used the current shell directory instead.</td></tr>
 </tbody>
 </table>
 </div>
@@ -1214,70 +1177,69 @@ between the left-hand side and the right-hand side of the regression.</p>
 <table>
 <thead><tr><th>Check</th><th>How it works</th><th>What it catches</th></tr></thead>
 <tbody>
-<tr><td><code>validate_raw_cache</code>, run on every load</td><td>Nine assertions against the metadata contract before any arithmetic</td><td>A swapped, truncated, or unadjusted price file</td></tr>
-<tr><td><code>test_forward_realized_variance_uses_future_returns_only</code></td><td>Four hand-computed rows on a toy series; also asserts the last two rows are empty</td><td>A shift of the wrong size or sign in the target</td></tr>
-<tr><td><code>test_equal_weight_portfolio_return_averages_simple_returns_first</code></td><td>Compares against <code>log1p(mean(simple returns))</code> computed independently</td><td>Reverting to the wrong "average the log returns" shortcut</td></tr>
-<tr><td><code>test_walk_forward_slices_respect_train_before_test</code></td><td>Asserts <code>train.stop == test.start - h + 1</code> for every fold</td><td>Anyone narrowing or removing the purge gap</td></tr>
-<tr><td><code>test_naive_forecast_updates_with_each_newly_observable_target</code></td><td>Toy series 0..7 with $h=3$; expects exactly <code>[0, 1, 2]</code></td><td>A benchmark frozen for a whole test block instead of rolling daily</td></tr>
-<tr><td><code>test_ridge_variance_forecasts_are_nonnegative</code></td><td>Features deliberately on wildly different scales, then asserts no forecast is below zero</td><td>Removal of the zero floor, or the scaler being dropped from the pipeline</td></tr>
+<tr><td><code>validate_raw_cache</code>, run on every load</td><td>Nine checks against the metadata contract before any arithmetic</td><td>A swapped, truncated, or unadjusted price file</td></tr>
+<tr><td><code>test_forward_realized_variance_uses_future_returns_only</code></td><td>Four hand-computed rows on a toy series; also checks that the last two rows are empty</td><td>A target shift with the wrong size or sign</td></tr>
+<tr><td><code>test_equal_weight_portfolio_return_averages_simple_returns_first</code></td><td>Compares with independently computed <code>log1p(mean(simple returns))</code></td><td>Returning to the wrong "average the log returns" shortcut</td></tr>
+<tr><td><code>test_walk_forward_slices_respect_train_before_test</code></td><td>Checks <code>train.stop == test.start - h + 1</code> for every fold</td><td>A narrowed or removed purge gap</td></tr>
+<tr><td><code>test_naive_forecast_updates_with_each_newly_observable_target</code></td><td>Toy series 0..7 with $h=3$; expects exactly <code>[0, 1, 2]</code></td><td>A benchmark frozen for a test block instead of updated daily</td></tr>
+<tr><td><code>test_ridge_variance_forecasts_are_nonnegative</code></td><td>Uses features on very different scales, then checks that no forecast is negative</td><td>Removal of the zero floor or scaler</td></tr>
 <tr><td><code>test_denoiser_outputs_are_symmetric</code></td><td>Checks all three matrices equal their own transpose</td><td>Floating-point drift breaking symmetry in the RMT rebuild</td></tr>
-<tr><td><code>test_covariance_features_use_in_sample_windows_only</code></td><td>Asserts the first feature row is stamped at return row <code>lookback - 1</code></td><td>An off-by-one that would stamp a window with a date it does not cover</td></tr>
-<tr><td><code>test_run_offline_demo_writes_required_artifacts</code></td><td>Runs the whole pipeline into a temporary directory and checks all six files appear</td><td>Any breakage in the wiring between modules</td></tr>
+<tr><td><code>test_covariance_features_use_in_sample_windows_only</code></td><td>Checks that the first feature row is stamped at return row <code>lookback - 1</code></td><td>An off-by-one that stamps a window with a date it does not cover</td></tr>
+<tr><td><code>test_run_offline_demo_writes_required_artifacts</code></td><td>Runs the pipeline in a temporary directory and checks that all six files appear</td><td>Broken wiring between modules</td></tr>
 <tr><td><code>test_metric_calculations_are_deterministic_on_toy_data</code></td><td>Calls the metrics builder twice and compares</td><td>Hidden randomness or state in the scoring path</td></tr>
-<tr><td><code>ruff</code> and <code>mypy</code> settings in <code>pyproject.toml</code></td><td><code>disallow_untyped_defs = true</code>, 100-character lines, Python 3.12 target</td><td>Untyped function signatures slipping in</td></tr>
+<tr><td><code>ruff</code> and <code>mypy</code> settings in <code>pyproject.toml</code></td><td><code>disallow_untyped_defs = true</code>, 100-character lines, Python 3.12 target</td><td>Untyped function signatures</td></tr>
 </tbody>
 </table>
 </div>
 
-<p class="fnote">23 tests, all passing as of 2026-08-10, in about 9 seconds.
-There is no test that the ridge model beats anything, which is the right
-choice: the tests protect the method, not the conclusion.</p>
+<p class="fnote">23 tests passed as of 2026-08-10, in about 9 seconds. No test
+checks whether ridge beats another model. That is appropriate: the tests protect
+the method, not the conclusion.</p>
 
 <h2 id="limits"><span class="sec-no">17</span>Limitations, stated honestly</h2>
 
-<div class="box flag"><span class="k">The sample is one universe, one horizon, one everything</span>
-<p>Eight funds, one 63-day lookback, one 21-day horizon, one feature set, one
-fixed ridge penalty, one price history. Nothing was varied, so there is no way to
-tell whether the negative result is about denoised covariance features in general
-or about this particular corner. The upside is that nothing was tuned either, so
-the result is not the product of a search over settings.</p></div>
+<div class="box flag"><span class="k">One universe, horizon, and feature set</span>
+<p>The study uses eight funds, one 63-day lookback, one 21-day horizon, one
+feature set, one fixed ridge penalty, and one price history. Because nothing was
+varied, the negative result may be specific to this setup rather than denoised
+covariance features in general. Nothing was tuned, so it is not the result of a
+search over settings.</p></div>
 
-<div class="box flag"><span class="k">The error measures cannot support a significance claim</span>
+<div class="box flag"><span class="k">The error measures cannot show significance</span>
 <p>Neighbouring targets share 20 of their 21 days. The 3906 forecasts contain
-far less independent information than the count suggests. Comparing 0.010610 to
-0.018354 tells you the naive rule is better here; it does not tell you the gap
-is statistically significant, and the code makes no attempt to say that it is.</p></div>
+far less independent information than the count suggests. Comparing 0.010610
+with 0.018354 shows that the naive rule is better here; it does not show that the
+gap is statistically significant, and the code does not claim that it is.</p></div>
 
-<div class="box flag"><span class="k">Condition numbers are a weak proxy for what practitioners care about</span>
-<p>The project measures denoising quality by how well conditioned the matrix is.
+<div class="box flag"><span class="k">Condition numbers are a weak proxy for investment use</span>
+<p>The project measures denoising quality by how easy the matrix is to invert.
 That is a numerical property, not a financial one. It does not test whether the
 cleaned matrix produces better portfolio weights, lower turnover, or better
-hedges &mdash; which is what covariance cleaning is actually used for.
-<code>GUIDE_OVERVIEW.md</code> is explicit that this separation is intentional,
-but it does limit what the negative result means.</p></div>
+hedges &mdash; the practical uses of covariance cleaning.
+<code>GUIDE_OVERVIEW.md</code> says this separation is intentional, but it limits
+what the negative result means.</p></div>
 
-<div class="box flag"><span class="k">The model is barely a model</span>
-<p>A linear regression on seven features, with a penalty of 1.0 that was never
-tuned, predicting a quantity that is bounded below at zero and violently
-right-skewed. It fails the non-negativity constraint one time in five. A
-sensible alternative would be to model the logarithm of variance, which is
-roughly symmetric and cannot produce an impossible forecast. The negative result
-is therefore partly a statement about a poorly matched model, not only about the
-features.</p></div>
+<div class="box flag"><span class="k">The model is a poor match for the target</span>
+<p>It is a linear regression on seven features with a penalty of 1.0 that was
+never tuned. The target cannot be negative and is strongly right-skewed, yet the
+model violates the non-negativity constraint one time in five. Modelling the
+logarithm of variance would be a sensible alternative because it is roughly
+symmetric and cannot produce a negative forecast. The negative result partly
+reflects the model choice, not only the features.</p></div>
 
-<div class="box flag"><span class="k">No transaction costs, no investability, no out-of-sample data</span>
-<p>There is no trading, so there are no costs, but there is also no evidence that
-a better variance forecast would have been worth anything. And the tracked file
-ends 2024-12-31, so every result on this page has been seen by whoever tuned the
-pipeline. There is no held-back period.</p></div>
+<div class="box flag"><span class="k">No transaction costs, investability, or held-back data</span>
+<p>There is no trading, so there are no costs. There is also no evidence that a
+better variance forecast would have been useful. The tracked file ends
+2024-12-31, so the pipeline's entire history was available during development.
+There is no held-back period.</p></div>
 
-<p class="foot">Companion reading in the repository: <code>docs/reference/math.md</code>
-for the formulas in plain text, <code>docs/reference/system_design.md</code> for
-the five-layer structure, <code>GUIDE_ROOT.md</code> and the per-folder
-<code>GUIDE_*.md</code> files for the intent behind each directory, and
-<code>blog/index.md</code> for the narrative version. Every number on this page
-was produced by running the code on <code>data/raw/raw_prices.parquet</code>
-(34,232 rows, 8 funds, 2008-01-02 to 2024-12-31) on 2026-08-10.</p>
+<p class="foot">Companion reading: <code>docs/reference/math.md</code> has the
+formulas in plain text; <code>docs/reference/system_design.md</code> explains the
+five-layer structure; <code>GUIDE_ROOT.md</code> and the per-folder
+<code>GUIDE_*.md</code> files explain each directory; and <code>blog/index.md</code>
+has the narrative version. Every number on this page came from running the code
+on <code>data/raw/raw_prices.parquet</code> (34,232 rows, 8 funds, 2008-01-02 to
+2024-12-31) on 2026-08-10.</p>
 
 </div>
 </body>
