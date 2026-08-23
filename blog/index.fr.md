@@ -8,20 +8,20 @@ categories: ["Quantitative Finance", "Risk Modeling"]
 
 Le nettoyage d'une covariance répond à un vrai problème. Une matrice de
 covariance bruitée peut rendre un portefeuille de variance minimale ou un ratio
-de couverture instable. J'ai voulu tester une affirmation plus exigeante : les
-diagnostics tirés d'une matrice nettoyée aident-ils à prévoir la variance réalisée
-du mois suivant ?
+de couverture instable. Cela ne la rend pas prédictive pour autant. J'ai testé
+si les diagnostics tirés d'une matrice nettoyée aident à prévoir la variance
+réalisée du mois suivant.
 
 J'ai mené l'expérience sur huit fonds négociés en bourse (ETF) entre 2008 et
 2024. Un benchmark glissant fondé sur la dernière cible observable l'emporte. Par
 rapport à lui, la régression ridge standardisée augmente l'erreur absolue moyenne
-(MAE) de 73,0 % et la racine de l'erreur quadratique moyenne (RMSE) de 4,2 %. Le
-nettoyage améliore nettement le conditionnement de la matrice. Ces sept features
+(MAE) de 73,0 % et la racine de l'erreur quadratique moyenne, ou RMSE, de 4,2 %. Le
+nettoyage améliore le conditionnement de la matrice. Ces sept features
 issues des matrices nettoyées n'améliorent pas la prévision.
 
 ![Une matrice de covariance bruitée traverse un filtre spectral et ressort sous une forme plus nette.](images/cover-covariance-denoising.png)
 
-Cette distinction est le sujet de l'étude. Le conditionnement mesure la réaction
+Cette distinction guide l'expérience. Le conditionnement mesure la réaction
 d'une matrice à de petites variations des données. La prévision demande si la
 matrice d'aujourd'hui contient de l'information sur des rendements encore
 inconnus. Les deux propriétés ne vont pas forcément ensemble.
@@ -119,10 +119,9 @@ empirique est 271,2. Ledoit-Wolf le ramène à 9,1 et RMT à 91,1.
 
 ![Nombres de conditionnement des covariances empirique, Ledoit-Wolf et RMT sur la dernière fenêtre de 63 jours.](images/01-condition-numbers.png)
 
-Le graphique soutient une affirmation précise : les deux méthodes améliorent le
-conditionnement sur cette fenêtre, et Ledoit-Wolf agit plus fortement. Il ne
-prouve ni une meilleure prévision de covariance ni une meilleure performance de
-portefeuille.
+Le graphique montre que les deux méthodes améliorent le conditionnement sur cette
+fenêtre, avec une réduction plus forte pour Ledoit-Wolf. Il ne dit encore rien sur
+la qualité des prévisions de covariance ou la performance d'un portefeuille.
 
 ## De la matrice aux sept prédicteurs
 
@@ -134,7 +133,7 @@ prédicteurs :
 - chaque nombre nettoyé divisé par le nombre de la covariance empirique ;
 - la volatilité annualisée sur 21 jours d'un portefeuille équipondéré et rééquilibré chaque jour.
 
-La construction du rendement du portefeuille demande un peu de soin. La moyenne
+Le calcul du rendement du portefeuille se trompe facilement. La moyenne
 des rendements logarithmiques des actifs n'est qu'une approximation du rendement
 d'un portefeuille équipondéré. Le code transforme d'abord chaque rendement
 logarithmique en rendement simple, calcule la moyenne de ces rendements simples,
@@ -262,7 +261,7 @@ plancher à zéro dans 784 prévisions sur 3 906, soit 20,1 % de l'échantillon.
 erreurs sur les dates ordinaires dégradent la MAE. Aucun des deux modèles
 n'anticipe les variances de crise de façon fiable, ce qui resserre l'écart de RMSE.
 
-## Ce que l'expérience démontre, et ce qu'elle ne démontre pas
+## Où s'arrête le résultat
 
 Le résultat sur le conditionnement et la victoire du benchmark résistent à
 l'audit, mais pas l'implémentation initiale. Il a fallu purger les labels
@@ -280,7 +279,7 @@ emboîtés. L'expérience fixe aussi l'univers, la fenêtre de 63 jours, l'horiz
 ni coûts de rotation, ni ratio de couverture, ni attribution du risque. Ces usages
 emploient la covariance plus directement que sept résumés scalaires.
 
-Je séparerais la suite en trois questions :
+Je diviserais la prochaine version en trois questions :
 
 1. Le nettoyage réduit-il l'erreur de covariance hors échantillon ?
 2. Améliore-t-il le risque réalisé et la rotation d'un portefeuille contraint ?

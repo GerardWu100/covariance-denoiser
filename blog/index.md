@@ -7,22 +7,22 @@ categories: ["Quantitative Finance", "Risk Modeling"]
 ---
 
 Covariance cleaning solves a real problem. A noisy covariance matrix can make a
-minimum-variance portfolio or a hedge ratio unstable. I wanted to test a harder
-claim: do diagnostics from a cleaned matrix help predict the next month of
-realized variance?
+minimum-variance portfolio or a hedge ratio unstable. But that does not make it
+predictive. I tested whether diagnostics from a cleaned matrix help predict the
+next month of realized variance.
 
 I ran the experiment on eight exchange-traded funds (ETFs) from 2008 through
 2024. A rolling last-observed target benchmark wins. Relative to that benchmark,
 scaled ridge regression raises mean absolute error (MAE) by 73.0% and root mean
-squared error (RMSE) by 4.2%. Cleaning clearly improves matrix conditioning. These
-seven cleaned-matrix features do not improve this forecast.
+squared error, or RMSE, by 4.2%. Cleaning improves matrix conditioning. These seven
+cleaned-matrix features do not improve this forecast.
 
 ![A noisy covariance matrix passing through a spectral filter and emerging in a cleaner form.](images/cover-covariance-denoising.png)
 
-The distinction in that last sentence matters. Conditioning asks whether a
-matrix reacts wildly to small input changes. Forecasting asks whether today's
-matrix contains information about returns that have not happened. One can
-improve without the other.
+That distinction drives the experiment. Conditioning asks whether a matrix
+reacts wildly to small input changes. Forecasting asks whether today's matrix
+contains information about returns that have not happened. One can improve
+without the other.
 
 ## The object being estimated
 
@@ -111,9 +111,9 @@ Ledoit-Wolf reduces it to 9.1 and RMT to 91.1.
 
 ![Condition numbers for sample, Ledoit-Wolf, and RMT covariance estimates on the final 63-day window.](images/01-condition-numbers.png)
 
-The chart supports a narrow claim: both cleaners improve conditioning on this
-window, and Ledoit-Wolf is more aggressive. It does not establish a better
-covariance forecast or better portfolio performance.
+The chart shows that both cleaners improve conditioning on this window, with a
+larger reduction from Ledoit-Wolf. It says nothing yet about a better covariance
+forecast or better portfolio performance.
 
 ## From a matrix to seven predictors
 
@@ -124,7 +124,7 @@ For every rolling 63-day window, the pipeline records seven predictors:
 - each cleaned condition number divided by the sample condition number;
 - trailing 21-day annualized volatility of a daily rebalanced equal-weight portfolio.
 
-The portfolio-return construction deserves care. Averaging asset log returns is
+The portfolio-return calculation is easy to get wrong. Averaging asset log returns is
 only an approximation to an equal-weight portfolio return. The code first
 converts each asset log return to a simple return, averages those simple returns,
 then converts the portfolio result back to log form. If $N$ is the asset count,
@@ -247,7 +247,7 @@ Ridge also produces false positives and reaches its zero floor on 784 of 3,906
 forecasts, or 20.1% of the sample. Those ordinary-date misses hurt MAE. Neither
 model anticipates crisis variance reliably, which keeps the RMSE gap much smaller.
 
-## What this experiment does and does not show
+## Where the result stops
 
 The conditioning result and the baseline victory both survive the audit, but the
 original implementation did not. Unavailable labels had to be purged, portfolio
@@ -264,7 +264,7 @@ It evaluates no minimum-variance portfolio, turnover cost, hedge ratio, or risk
 attribution task, all of which use covariance more directly than seven scalar
 summaries do.
 
-My next version would separate three questions:
+I would split the next version into three questions:
 
 1. Does cleaning reduce out-of-sample covariance estimation error?
 2. Does it improve realized risk and turnover for a constrained portfolio?
