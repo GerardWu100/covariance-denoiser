@@ -112,7 +112,3 @@ A successful `run-offline-demo` run writes to `outputs/demo/`:
 Adjacent 21-day targets overlap, so aggregate MAE and RMSE are descriptive
 rather than independent-observation inference; see
 `docs/reference/system_design.md` for the full evaluation guardrails.
-
-## License
-
-All rights reserved. See [LICENSE](LICENSE).
